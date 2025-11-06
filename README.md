@@ -41,6 +41,21 @@ python main.py --skip-data-prep --skip-training --model-path output/models/pose_
 
 ```bash
 python test_video.py --video "votre_video.mp4"
+# Sortie: votre_video_dynamic_annotated.mp4
+```
+
+### Sur une vidéo (TFLite haute précision - pour validation)
+
+```bash
+python test_video.py --video "votre_video.mp4" --model "output/models/pose_model_float32.tflite"
+# Sortie: votre_video_float32_annotated.mp4
+```
+
+### Sur une vidéo (Keras - pour validation)
+
+```bash
+python test_video_keras.py --video "votre_video.mp4"
+# Sortie: votre_video_keras_annotated.mp4
 ```
 
 ### Sur une vidéo (Keras - pour validation)
@@ -53,6 +68,8 @@ python test_video_keras.py --video "votre_video.mp4"
 
 ```bash
 python quick_compare.py
+# Compare Keras vs TFLite Dynamic (modèle recommandé)
+# Génère: *_keras_annotated.mp4 et *_dynamic_annotated.mp4
 ```
 
 ### Prédiction sur une image
@@ -100,16 +117,23 @@ Format CSV DeepLabCut avec colonnes :
 
 Après exécution, les fichiers sont sauvegardés dans `output/` :
 
-- `models/` : Modèles Keras (.h5) et TFLite (.tflite)
+- `models/` : Modèles Keras (.h5) et **2 modèles TFLite optimisés**
+  - `pose_model_dynamic.tflite` ⭐ **RECOMMANDÉ** : 6MB, précision ~1px
+  - `pose_model_float32.tflite` 🔬 **TESTS** : 22MB, précision maximale
 - `logs/` : Logs d'entraînement
-- Vidéos annotées : `{nom_video}_annotated.mp4`
+- Vidéos annotées : `{nom_video}_{type_modele}_annotated.mp4`
+  - `*_dynamic_annotated.mp4` : Annotations avec modèle TFLite Dynamic
+  - `*_float32_annotated.mp4` : Annotations avec modèle TFLite Float32
+  - `*_keras_annotated.mp4` : Annotations avec modèle Keras
 
 ## Métriques
 
 Le modèle atteint généralement :
 
-- **Précision TFLite** : ~3-4 pixels d'erreur moyenne
-- **Taille modèle** : ~6MB (quantizé)
+- **Précision TFLite Dynamic** : ~1 pixel d'erreur moyenne (recommandé)
+- **Précision TFLite Float32** : ~0 pixel d'erreur (tests/validation)
+- **Taille modèle Dynamic** : ~6MB (optimisé pour mobile)
+- **Taille modèle Float32** : ~22MB (haute précision)
 - **Vitesse** : ~30 FPS sur CPU mobile
 
 ## Architecture

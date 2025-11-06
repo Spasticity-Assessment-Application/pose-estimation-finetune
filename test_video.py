@@ -244,7 +244,17 @@ def main():
     # Output par défaut
     if not args.output:
         video_name = Path(args.video).stem
-        args.output = f"output/{video_name}_annotated.mp4"
+        
+        # Déterminer le type de modèle
+        model_name = Path(args.model).name
+        if 'dynamic' in model_name:
+            model_type = 'dynamic'
+        elif 'float32' in model_name:
+            model_type = 'float32'
+        else:
+            model_type = 'tflite'
+        
+        args.output = f"output/{video_name}_{model_type}_annotated.mp4"
         os.makedirs("output", exist_ok=True)
     
     # Traiter la vidéo

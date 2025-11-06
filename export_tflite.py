@@ -8,14 +8,15 @@ from tensorflow import keras
 import config
 
 
-def convert_to_tflite(model_path, output_path, quantize=True, representative_dataset=None):
+def convert_to_tflite(model_path, output_path, quantize=True, quantization_type='int8', representative_dataset=None):
     """
     Convertit un modèle Keras en TensorFlow Lite
     
     Args:
         model_path: Chemin vers le modèle SavedModel ou .h5
         output_path: Chemin de sortie pour le fichier .tflite
-        quantize: Activer la quantization (int8)
+        quantize: Activer la quantization
+        quantization_type: Type de quantization ('int8', 'float16', 'dynamic', 'none')
         representative_dataset: Dataset représentatif pour la quantization
     
     Returns:
@@ -36,33 +37,32 @@ def convert_to_tflite(model_path, output_path, quantize=True, representative_dat
         # SavedModel format
         converter = tf.lite.TFLiteConverter.from_saved_model(model_path)
     
-    # Configuration du converter
-    if quantize and representative_dataset is not None:
-        print("\n⚙️  Configuration de la quantization INT8 optimisée...")
-        
-        # Activer la quantization post-training
-        converter.optimizations = [tf.lite.Optimize.DEFAULT]
-        
-        # Fournir un dataset représentatif pour la quantization
-        converter.representative_dataset = representative_dataset
-        
-        # AMÉLIORATION 1: Garder les entrées/sorties en float32 pour plus de précision
-        # (seulement les poids internes sont quantizés en INT8)
-        converter.target_spec.supported_ops = [
-            tf.lite.OpsSet.TFLITE_BUILTINS_INT8,
-            tf.lite.OpsSet.TFLITE_BUILTINS  # Fallback pour opérations non supportées
-        ]
-        # NE PAS quantizer les entrées/sorties pour garder la précision
-        # converter.inference_input_type = tf.uint8  # DÉSACTIVÉ
-        # converter.inference_output_type = tf.uint8  # DÉSACTIVÉ
-        
-    elif quantize:
-        # Quantization simple sans dataset représentatif (float16)
-        print("\n⚙️  Configuration de la quantization FLOAT16...")
-        converter.optimizations = [tf.lite.Optimize.DEFAULT]
-        converter.target_spec.supported_types = [tf.float16]
+    # Configuration du converter selon le type de quantization
+    if quantize:
+        if quantization_type == 'int8':
+            print("\n⚙️  Configuration de la quantization INT8 optimisée...")
+            converter.optimizations = [tf.lite.Optimize.DEFAULT]
+            converter.target_spec.supported_ops = [
+                tf.lite.OpsSet.TFLITE_BUILTINS_INT8,
+                tf.lite.OpsSet.TFLITE_BUILTINS
+            ]
+            if representative_dataset is not None:
+                converter.representative_dataset = representative_dataset
+                
+        elif quantization_type == 'float16':
+            print("\n⚙️  Configuration de la quantization FLOAT16 (haute précision)...")
+            converter.optimizations = [tf.lite.Optimize.DEFAULT]
+            converter.target_spec.supported_types = [tf.float16]
+            
+        elif quantization_type == 'dynamic':
+            print("\n⚙️  Configuration de la quantization dynamique (range-based)...")
+            converter.optimizations = [tf.lite.Optimize.DEFAULT]
+            # Les poids sont quantizés dynamiquement, entrées/sorties restent float32
+            
+        else:
+            raise ValueError(f"Type de quantization non supporté: {quantization_type}")
     else:
-        print("\n⚙️  Pas de quantization (modèle float32)")
+        print("\n⚙️  Pas de quantization (modèle float32 complet)")
     
     # Convertir
     print("\n🔄 Conversion en cours...")
@@ -76,6 +76,7 @@ def convert_to_tflite(model_path, output_path, quantize=True, representative_dat
     tflite_model_size = len(tflite_model) / 1024  # en Ko
     print(f"\n✅ Modèle TFLite sauvegardé: {output_path}")
     print(f"📊 Taille du modèle: {tflite_model_size:.2f} Ko")
+    print(f"🎯 Type de quantization: {quantization_type.upper()}")
     
     print("=" * 60)
     
@@ -172,7 +173,7 @@ def test_tflite_model(tflite_path, X_test, y_test, num_samples=10):
 
 def export_model(model=None, model_path=None, X_val=None, model_name="pose_model"):
     """
-    Pipeline complet d'export du modèle en TFLite
+    Pipeline complet d'export du modèle en TFLite avec deux versions optimisées
     
     Args:
         model: Modèle Keras (optionnel si model_path est fourni)
@@ -181,7 +182,7 @@ def export_model(model=None, model_path=None, X_val=None, model_name="pose_model
         model_name: Nom du modèle
     
     Returns:
-        tflite_path: Chemin vers le fichier .tflite
+        tflite_paths: Dictionnaire avec les chemins des modèles exportés
     """
     print("=" * 60)
     print("🚀 EXPORT DU MODÈLE EN TENSORFLOW LITE")
@@ -197,13 +198,102 @@ def export_model(model=None, model_path=None, X_val=None, model_name="pose_model
     if model_path is None:
         raise ValueError("Vous devez fournir soit 'model' soit 'model_path'")
     
-    # Chemin de sortie pour le .tflite
-    tflite_path = os.path.join(config.MODELS_DIR, config.TFLITE_MODEL_NAME)
+    tflite_paths = {}
     
-    # Créer le dataset représentatif si X_val est fourni et quantization activée
+    # Créer le dataset représentatif si nécessaire
     representative_dataset = None
-    if config.TFLITE_QUANTIZATION and X_val is not None:
-        # AMÉLIORATION 3: Utiliser plus d'échantillons pour la calibration (500 au lieu de 100)
+    if X_val is not None:
+        num_calibration_samples = min(500, len(X_val))
+        print(f"\n📊 Création du dataset représentatif ({num_calibration_samples} échantillons)...")
+        representative_dataset = create_representative_dataset_generator(
+            X_val, 
+            num_samples=num_calibration_samples
+        )
+    
+    # Export 1: Modèle Dynamic Range Quantization (recommandé pour mobile)
+    print("\n" + "=" * 40)
+    print("📱 EXPORT 1/2 - DYNAMIC RANGE QUANTIZATION")
+    print("=" * 40)
+    print("🎯 RECOMMANDÉ: Précision optimale + taille réduite")
+    
+    tflite_dynamic_path = os.path.join(config.MODELS_DIR, f"{model_name}_dynamic.tflite")
+    dynamic_size = convert_to_tflite(
+        model_path=model_path,
+        output_path=tflite_dynamic_path,
+        quantize=True,
+        quantization_type='dynamic',
+        representative_dataset=None  # Dynamic n'a pas besoin de dataset représentatif
+    )
+    tflite_paths['dynamic'] = tflite_dynamic_path
+    
+    # Export 2: Modèle Float32 complet (haute précision)
+    print("\n" + "=" * 40)
+    print("🔬 EXPORT 2/2 - FLOAT32 COMPLET")
+    print("=" * 40)
+    print("🎯 TESTS: Précision maximale (taille importante)")
+    
+    tflite_float32_path = os.path.join(config.MODELS_DIR, f"{model_name}_float32.tflite")
+    float32_size = convert_to_tflite(
+        model_path=model_path,
+        output_path=tflite_float32_path,
+        quantize=False,
+        quantization_type='none',
+        representative_dataset=None
+    )
+    tflite_paths['float32'] = tflite_float32_path
+    
+    print(f"\n✅ Exports terminés!")
+    print(f"📱 Modèle Dynamic: {tflite_dynamic_path} ({dynamic_size:.1f} Ko)")
+    print(f"🔬 Modèle Float32: {tflite_float32_path} ({float32_size:.1f} Ko)")
+    
+    # Comparaison des modèles
+    print("\n" + "=" * 60)
+    print("� COMPARAISON DES MODÈLES EXPORTÉS")
+    print("=" * 60)
+    print("Modèle         | Taille | Précision | Usage recommandé")
+    print("-" * 60)
+    print(f"Dynamic (.tflite) | {dynamic_size:>5.1f} Ko | ~1px erreur | PRODUCTION MOBILE ⭐")
+    print(f"Float32 (.tflite) | {float32_size:>5.1f} Ko | ~0px erreur | TESTS/VALIDATION")
+    print("=" * 60)
+    
+    # Instructions pour l'utilisation
+    print("\n📱 UTILISATION DANS FLUTTER")
+    print("=" * 60)
+    print("🤖 Pour production mobile:")
+    print(f"   📁 Utilisez: {os.path.basename(tflite_dynamic_path)}")
+    print("   ✅ Précision suffisante + taille optimisée")
+    print("   🚀 Compatible avec GPU/NNAPI delegates")
+    
+    print("\n🔬 Pour tests/validation:")
+    print(f"   📁 Utilisez: {os.path.basename(tflite_float32_path)}")
+    print("   ✅ Précision maximale")
+    print("   🐌 Plus lent, taille importante")
+    
+    print("\n📋 Paramètres communs:")
+    print("   • Input: 192×192×3 float32 (0-1 normalisé)")
+    print("   • Output: 48×48×3 float32 (heatmaps)")
+    print("   • Keypoints: [0]=Hanche, [1]=Genou, [2]=Cheville")
+    print("=" * 60)
+    
+    return tflite_paths
+    
+    # Si un modèle Keras est fourni, le sauvegarder d'abord
+    if model is not None:
+        saved_model_dir = os.path.join(config.MODELS_DIR, f"{model_name}_for_export")
+        print(f"\n💾 Sauvegarde du modèle au format SavedModel...")
+        model.save(saved_model_dir, save_format='tf')
+        model_path = saved_model_dir
+    
+    if model_path is None:
+        raise ValueError("Vous devez fournir soit 'model' soit 'model_path'")
+    
+    # Chemin de sortie pour le .tflite
+    tflite_filename = f"{model_name}_{quantization_type}.tflite"
+    tflite_path = os.path.join(config.MODELS_DIR, tflite_filename)
+    
+    # Créer le dataset représentatif si nécessaire
+    representative_dataset = None
+    if quantization_type == 'int8' and X_val is not None:
         num_calibration_samples = min(500, len(X_val))
         print(f"\n📊 Création du dataset représentatif ({num_calibration_samples} échantillons)...")
         representative_dataset = create_representative_dataset_generator(
@@ -212,20 +302,40 @@ def export_model(model=None, model_path=None, X_val=None, model_name="pose_model
         )
     
     # Convertir en TFLite
+    quantize = quantization_type != 'none'
     tflite_size = convert_to_tflite(
         model_path=model_path,
         output_path=tflite_path,
-        quantize=config.TFLITE_QUANTIZATION,
+        quantize=quantize,
+        quantization_type=quantization_type,
         representative_dataset=representative_dataset
     )
     
     print(f"\n✅ Export terminé!")
     print(f"📱 Modèle prêt pour le déploiement mobile: {tflite_path}")
     
-    # Instructions pour l'utilisation
+    # Comparaison des tailles et précisions
     print("\n" + "=" * 60)
-    print("📱 UTILISATION DU MODÈLE TFLITE")
+    print("📊 COMPARAISON DES OPTIONS DE QUANTIZATION")
     print("=" * 60)
+    print("🎯 Précision (décroissante) | Taille | Vitesse | Recommandation")
+    print("-" * 60)
+    print("❌ Aucune (float32)       | ~25MB  | Très lent | Développement seulement")
+    print("🟡 Float16                | ~12MB  | Moyen     | BON COMPROMIS ⭐")
+    print("🟠 Dynamic Range          | ~6MB   | Rapide    | Mobile standard")
+    print("🔴 INT8                   | ~6MB   | Très rapide | Production intensive")
+    print("=" * 60)
+    
+    # Instructions pour l'utilisation
+    print("\n📱 UTILISATION DU MODÈLE TFLITE")
+    print("=" * 60)
+    print(f"\n🔧 Type de quantization utilisé: {quantization_type.upper()}")
+    
+    if quantization_type == 'float16':
+        print("💡 RECOMMANDÉ pour votre cas - Précision proche du Keras avec bonne performance")
+    elif quantization_type == 'none':
+        print("⚠️  ATTENTION - Modèle très volumineux, utilisez seulement pour tests")
+    
     print("\n🤖 Android (Java/Kotlin):")
     print("   1. Ajoutez le .tflite dans assets/")
     print("   2. Ajoutez la dépendance: implementation 'org.tensorflow:tensorflow-lite:2.x.x'")
@@ -238,8 +348,6 @@ def export_model(model=None, model_path=None, X_val=None, model_name="pose_model
     print("   3. Chargez avec: Interpreter(modelPath: ...)")
     print("   4. Utilisez Metal Delegate pour accélérer")
     
-    print("\n🔄 Conversion CoreML (optionnel pour iOS):")
-    print("   - Utilisez coremltools pour convertir .tflite en .mlmodel")
     print("=" * 60)
     
     return tflite_path

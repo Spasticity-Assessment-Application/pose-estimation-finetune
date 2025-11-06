@@ -65,12 +65,14 @@ def main(args):
         print(f"✅ Modèle chargé depuis: {saved_model_dir}")
 
     # ÉTAPE 4: Export TFLite
+    tflite_paths = None
     if not args.skip_export:
         print("\nÉTAPE 4/4 - EXPORT TENSORFLOW LITE")
-        tflite_path = export_model(model_path=saved_model_dir, X_val=X_val, model_name=model_name)
+        tflite_paths = export_model(model_path=saved_model_dir, X_val=X_val, model_name=model_name)
 
         if args.test_tflite:
-            test_tflite_model(tflite_path, X_val, y_val, num_samples=10)
+            # Tester le modèle recommandé (dynamic)
+            test_tflite_model(tflite_paths['dynamic'], X_val, y_val, num_samples=10)
     
     # Résumé final
     print("\n" + "=" * 60)
@@ -80,11 +82,12 @@ def main(args):
     print(f"   - Modèles: {config.MODELS_DIR}")
     print(f"   - Logs: {config.LOGS_DIR}")
 
-    if tflite_path:
-        print(f"\n📱 Modèle TFLite prêt pour le déploiement:")
-        print(f"   {tflite_path}")
+    if tflite_paths:
+        print(f"\n📱 Modèles TFLite prêts pour le déploiement:")
+        print(f"   ⭐ PRODUCTION: {os.path.basename(tflite_paths['dynamic'])}")
+        print(f"   🔬 TESTS: {os.path.basename(tflite_paths['float32'])}")
         print(f"\n💡 Prochaines étapes:")
-        print(f"   1. Testez le modèle sur de nouvelles images")
+        print(f"   1. Testez le modèle dynamic sur de nouvelles images")
         print(f"   2. Intégrez-le dans votre application mobile")
         print(f"   3. Utilisez GPU Delegate (Android) ou Metal Delegate (iOS) pour accélérer")
 

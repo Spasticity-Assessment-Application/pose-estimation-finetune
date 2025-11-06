@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv
+
+# Jupyter
+.ipynb_checkpoints
+*.ipynb
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Output du projet
+output/
+*.h5
+*.tflite
+*.pb
+saved_model/
+*.npz
+
+# Logs
+logs/
+*.log
+
+# Data (optionnel - décommenter si vous ne voulez pas versionner les images)
+# labeled-data/
+# *.png
+# *.jpg
+# *.jpeg
+
+# MacOS
+.DS_Store
+
+# TensorFlow
+*.ckpt
+checkpoint
+
+# Plots
+*.png
+*.pdf

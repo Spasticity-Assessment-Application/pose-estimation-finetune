@@ -18,6 +18,22 @@ def main(args):
     print("🎯 PIPELINE DE FINE-TUNING - POSE ESTIMATION")
     print("=" * 60)
 
+    # Configurer le backbone si spécifié en argument
+    if args.backbone:
+        config.BACKBONE = args.backbone
+        # Adapter la taille d'image selon le backbone
+        if args.backbone in config.BACKBONE_INPUT_SIZES:
+            recommended_size = config.BACKBONE_INPUT_SIZES[args.backbone]
+            config.IMAGE_SIZE = recommended_size
+            config.INPUT_SHAPE = (*recommended_size, 3)
+            print(f"\n📦 Backbone: {args.backbone}")
+            print(f"📊 Taille d'image adaptée: {recommended_size[0]}x{recommended_size[1]}")
+    
+    print(f"\n🎯 Configuration:")
+    print(f"   - Backbone: {config.BACKBONE}")
+    print(f"   - Input size: {config.INPUT_SHAPE[0]}x{config.INPUT_SHAPE[1]}")
+    print(f"   - Heatmap size: {config.HEATMAP_SIZE[0]}x{config.HEATMAP_SIZE[1]}")
+
     # ÉTAPE 0: Configuration des dossiers
     print("\n📁 CONFIGURATION DES DOSSIERS")
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -94,15 +110,6 @@ def main(args):
     print(f"   - Logs: {logs_dir}")
     print(f"   - Vidéos: {videos_dir}")
 
-    if tflite_paths:
-        print(f"\n📱 Modèles TFLite prêts pour le déploiement:")
-        print(f"   ⭐ PRODUCTION: {os.path.basename(tflite_paths['dynamic'])}")
-        print(f"   🔬 TESTS: {os.path.basename(tflite_paths['float32'])}")
-        print(f"\n💡 Prochaines étapes:")
-        print(f"   1. Testez le modèle dynamic sur de nouvelles images")
-        print(f"   2. Intégrez-le dans votre application mobile")
-        print(f"   3. Utilisez GPU Delegate (Android) ou Metal Delegate (iOS) pour accélérer")
-
     print("\n" + "=" * 60)
 
 
@@ -129,6 +136,21 @@ def parse_arguments():
         '--skip-export',
         action='store_true',
         help="Sauter l'export TFLite"
+    )
+    
+    # Configuration du modèle
+    parser.add_argument(
+        '--backbone',
+        type=str,
+        default=None,
+        choices=[
+            'MobileNetV2', 'MobileNetV3Small', 'MobileNetV3Large',
+            'EfficientNetLite0', 'EfficientNetLite1', 'EfficientNetLite2', 
+            'EfficientNetLite3', 'EfficientNetLite4',
+            'EfficientNetB0', 'EfficientNetB1', 'EfficientNetB2', 'EfficientNetB3',
+            'EfficientNetV2B0', 'EfficientNetV2B1', 'EfficientNetV2B2', 'EfficientNetV2B3'
+        ],
+        help="Backbone à utiliser (défaut: MobileNetV2)"
     )
     
     # Options de sauvegarde

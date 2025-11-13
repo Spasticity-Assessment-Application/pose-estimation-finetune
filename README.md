@@ -1,6 +1,8 @@
 # Fine-tuning Pose Estimation
 
-Modèle de pose estimation fine-tuné sur MobileNetV2 pour détecter 3 keypoints : hanche, genou, cheville.
+Modèle de pose estimation fine-tuné avec support multi-backbones pour détecter 3 keypoints : hanche, genou, cheville.
+
+**Backbones supportés** : MobileNetV2 (défaut), MobileNetV3, EfficientNetLite0-4, EfficientNetB0-3, EfficientNetV2B0-3
 
 ## Installation
 
@@ -25,7 +27,14 @@ pip install -r requirements.txt
 ### Pipeline complet (entraînement + export)
 
 ```bash
+# Avec MobileNetV2 (défaut - rapide et léger)
 python main.py --save-data
+
+# Avec EfficientNetLite (meilleure précision, optimisé mobile)
+python main.py --save-data --backbone EfficientNetLite0
+
+# Avec EfficientNetV2 (haute précision)
+python main.py --save-data --backbone EfficientNetV2B0
 ```
 
 ### Utiliser un modèle déjà entraîné
@@ -82,6 +91,7 @@ python predict.py --image "votre_image.jpg" --model "output/models/pose_model_be
 
 ### main.py
 
+- `--backbone` : Choix du backbone (MobileNetV2, EfficientNetLite0-4, etc. - défaut: MobileNetV2)
 - `--skip-data-prep` : Utiliser les données prétraitées
 - `--skip-training` : Charger un modèle existant
 - `--skip-export` : Ne pas exporter en TFLite
@@ -151,8 +161,21 @@ Le modèle atteint généralement (résultats du dernier test) :
 
 ## Architecture
 
-- **Backbone** : MobileNetV2 (pré-entraîné sur ImageNet)
-- **Tête** : Déconvolution 3 étages
+- **Backbone** : Multi-backbone support (MobileNetV2 par défaut, EfficientNetLite, EfficientNetB, EfficientNetV2)
+- **Tête** : Déconvolution 3 étages avec adaptation automatique à la sortie du backbone
 - **Sortie** : Heatmaps 48x48x3
 - **Fine-tuning** : Backbone gelé, seulement la tête entraînée
 - **Augmentation** : Rotation, translation, zoom, flip horizontal
+
+### Backbones disponibles
+
+**Légers (mobile/edge) :**
+
+- `MobileNetV2` (⭐ défaut) : 192x192, ~3.5M params, très rapide
+- `MobileNetV3Small` : 192x192, ~2.5M params, ultra-léger
+- `EfficientNetLite0-4` : 224-300px, précision progressive
+
+**Haute précision :**
+
+- `EfficientNetB0-3` : 224-300px, meilleure précision
+- `EfficientNetV2B0-3` : 224-300px, entraînement plus rapide

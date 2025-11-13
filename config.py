@@ -18,7 +18,25 @@ def get_model_folder_name(backbone=None, timestamp=None):
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 
     # Nettoyer le nom du backbone (enlever caractères spéciaux)
-    clean_backbone = backbone.replace("MobileNetV3", "MNv3").replace("MobileNetV2", "MNv2")
+    backbone_mapping = {
+        "MobileNetV2": "MNv2",
+        "MobileNetV3Small": "MNv3S",
+        "MobileNetV3Large": "MNv3L",
+        "EfficientNetLite0": "ENL0",
+        "EfficientNetLite1": "ENL1",
+        "EfficientNetLite2": "ENL2",
+        "EfficientNetLite3": "ENL3",
+        "EfficientNetLite4": "ENL4",
+        "EfficientNetB0": "ENB0",
+        "EfficientNetB1": "ENB1",
+        "EfficientNetB2": "ENB2",
+        "EfficientNetB3": "ENB3",
+        "EfficientNetV2B0": "ENV2B0",
+        "EfficientNetV2B1": "ENV2B1",
+        "EfficientNetV2B2": "ENV2B2",
+        "EfficientNetV2B3": "ENV2B3",
+    }
+    clean_backbone = backbone_mapping.get(backbone, backbone)
 
     return f"{clean_backbone}_{timestamp}"
 
@@ -79,9 +97,49 @@ REDUCE_LR_FACTOR = 0.5
 RANDOM_SEED = 42
 
 # Modèle
-BACKBONE = "MobileNetV2"
+BACKBONE = "MobileNetV2"  # Par défaut: MobileNetV2 (rapide, léger, performant)
 PRETRAINED_WEIGHTS = "imagenet"
 ALPHA = 1.0
+
+# Tailles d'images recommandées par backbone (pour performances optimales)
+BACKBONE_INPUT_SIZES = {
+    "MobileNetV2": (192, 192),
+    "MobileNetV3Small": (192, 192),
+    "MobileNetV3Large": (224, 224),
+    "EfficientNetLite0": (224, 224),
+    "EfficientNetLite1": (240, 240),
+    "EfficientNetLite2": (260, 260),
+    "EfficientNetLite3": (280, 280),
+    "EfficientNetLite4": (300, 300),
+    "EfficientNetB0": (224, 224),
+    "EfficientNetB1": (240, 240),
+    "EfficientNetB2": (260, 260),
+    "EfficientNetB3": (300, 300),
+    "EfficientNetV2B0": (224, 224),
+    "EfficientNetV2B1": (240, 240),
+    "EfficientNetV2B2": (260, 260),
+    "EfficientNetV2B3": (300, 300),
+}
+
+# Ratios de réduction du backbone (pour adapter la tête de déconvolution)
+BACKBONE_REDUCTION_RATIOS = {
+    "MobileNetV2": 32,          # 192/32 = 6x6
+    "MobileNetV3Small": 32,
+    "MobileNetV3Large": 32,
+    "EfficientNetLite0": 32,    # 224/32 = 7x7
+    "EfficientNetLite1": 32,
+    "EfficientNetLite2": 32,
+    "EfficientNetLite3": 32,
+    "EfficientNetLite4": 32,
+    "EfficientNetB0": 32,
+    "EfficientNetB1": 32,
+    "EfficientNetB2": 32,
+    "EfficientNetB3": 32,
+    "EfficientNetV2B0": 32,
+    "EfficientNetV2B1": 32,
+    "EfficientNetV2B2": 32,
+    "EfficientNetV2B3": 32,
+}
 
 # Export TFLite
 TFLITE_QUANTIZATION = True

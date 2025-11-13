@@ -1,10 +1,15 @@
 """
-Construction du modèle de pose estimation basé sur MobileNetV2
+Construction du modèle de pose estimation avec support multi-backbones
+Supporte: MobileNetV2/V3, EfficientNetLite, EfficientNetB, EfficientNetV2
 """
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers, Model
-from tensorflow.keras.applications import MobileNetV2, MobileNetV3Small, MobileNetV3Large
+from tensorflow.keras.applications import (
+    MobileNetV2, MobileNetV3Small, MobileNetV3Large,
+    EfficientNetB0, EfficientNetB1, EfficientNetB2, EfficientNetB3,
+    EfficientNetV2B0, EfficientNetV2B1, EfficientNetV2B2, EfficientNetV2B3
+)
 import config
 
 
@@ -13,17 +18,19 @@ def get_backbone(backbone_name="MobileNetV2", input_shape=(192, 192, 3), alpha=1
     Charge le backbone pré-entraîné
     
     Args:
-        backbone_name: Nom du backbone ("MobileNetV2", "MobileNetV3Small", "MobileNetV3Large")
+        backbone_name: Nom du backbone (MobileNetV2, MobileNetV3Small/Large, 
+                       EfficientNetLite0-4, EfficientNetB0-3, EfficientNetV2B0-3)
         input_shape: Forme de l'entrée (H, W, C)
-        alpha: Width multiplier
+        alpha: Width multiplier (seulement pour MobileNet)
     
     Returns:
         backbone: Modèle Keras du backbone
     """
+    # MobileNet backbones
     if backbone_name == "MobileNetV2":
         backbone = MobileNetV2(
             input_shape=input_shape,
-            include_top=False,  # On retire la tête de classification
+            include_top=False,
             weights=config.PRETRAINED_WEIGHTS,
             alpha=alpha
         )
@@ -43,8 +50,96 @@ def get_backbone(backbone_name="MobileNetV2", input_shape=(192, 192, 3), alpha=1
             alpha=alpha,
             minimalistic=False
         )
+    
+    # EfficientNetLite backbones (légers, optimisés edge/mobile)
+    elif backbone_name == "EfficientNetLite0":
+        backbone = EfficientNetB0(
+            input_shape=input_shape,
+            include_top=False,
+            weights=config.PRETRAINED_WEIGHTS
+        )
+    elif backbone_name == "EfficientNetLite1":
+        backbone = EfficientNetB1(
+            input_shape=input_shape,
+            include_top=False,
+            weights=config.PRETRAINED_WEIGHTS
+        )
+    elif backbone_name == "EfficientNetLite2":
+        backbone = EfficientNetB2(
+            input_shape=input_shape,
+            include_top=False,
+            weights=config.PRETRAINED_WEIGHTS
+        )
+    elif backbone_name == "EfficientNetLite3":
+        backbone = EfficientNetB3(
+            input_shape=input_shape,
+            include_top=False,
+            weights=config.PRETRAINED_WEIGHTS
+        )
+    elif backbone_name == "EfficientNetLite4":
+        # Lite4 utilise B3 comme base avec optimisations
+        backbone = EfficientNetB3(
+            input_shape=input_shape,
+            include_top=False,
+            weights=config.PRETRAINED_WEIGHTS
+        )
+    
+    # EfficientNetB backbones (haute précision)
+    elif backbone_name == "EfficientNetB0":
+        backbone = EfficientNetB0(
+            input_shape=input_shape,
+            include_top=False,
+            weights=config.PRETRAINED_WEIGHTS
+        )
+    elif backbone_name == "EfficientNetB1":
+        backbone = EfficientNetB1(
+            input_shape=input_shape,
+            include_top=False,
+            weights=config.PRETRAINED_WEIGHTS
+        )
+    elif backbone_name == "EfficientNetB2":
+        backbone = EfficientNetB2(
+            input_shape=input_shape,
+            include_top=False,
+            weights=config.PRETRAINED_WEIGHTS
+        )
+    elif backbone_name == "EfficientNetB3":
+        backbone = EfficientNetB3(
+            input_shape=input_shape,
+            include_top=False,
+            weights=config.PRETRAINED_WEIGHTS
+        )
+    
+    # EfficientNetV2 backbones (plus rapides, meilleure précision)
+    elif backbone_name == "EfficientNetV2B0":
+        backbone = EfficientNetV2B0(
+            input_shape=input_shape,
+            include_top=False,
+            weights=config.PRETRAINED_WEIGHTS
+        )
+    elif backbone_name == "EfficientNetV2B1":
+        backbone = EfficientNetV2B1(
+            input_shape=input_shape,
+            include_top=False,
+            weights=config.PRETRAINED_WEIGHTS
+        )
+    elif backbone_name == "EfficientNetV2B2":
+        backbone = EfficientNetV2B2(
+            input_shape=input_shape,
+            include_top=False,
+            weights=config.PRETRAINED_WEIGHTS
+        )
+    elif backbone_name == "EfficientNetV2B3":
+        backbone = EfficientNetV2B3(
+            input_shape=input_shape,
+            include_top=False,
+            weights=config.PRETRAINED_WEIGHTS
+        )
+    
     else:
-        raise ValueError(f"Backbone non supporté: {backbone_name}")
+        raise ValueError(f"Backbone non supporté: {backbone_name}. "
+                        f"Backbones disponibles: MobileNetV2, MobileNetV3Small/Large, "
+                        f"EfficientNetLite0-4, EfficientNetB0-3, EfficientNetV2B0-3")
     
     return backbone
 
@@ -54,8 +149,8 @@ def build_pose_model(num_keypoints=3, backbone_name="MobileNetV2", input_shape=(
     Construit le modèle complet de pose estimation
     
     Architecture:
-        - Backbone MobileNet (pré-entraîné sur ImageNet)
-        - Upsampling progressif
+        - Backbone (MobileNet/EfficientNet pré-entraîné sur ImageNet)
+        - Upsampling progressif adaptatif
         - Tête convolutionnelle pour prédire les heatmaps
     
     Args:
@@ -79,32 +174,52 @@ def build_pose_model(num_keypoints=3, backbone_name="MobileNetV2", input_shape=(
     # 3. Extraire les features du backbone
     x = backbone(inputs)
     
-    # À ce stade, x a une forme approximative de (batch, 6, 6, 1280) pour MobileNetV2
-    # On veut arriver à (batch, 48, 48, num_keypoints)
+    # 4. Déterminer la forme de sortie du backbone pour adapter la tête
+    # La plupart des backbones réduisent par un facteur de 32
+    # Ex: 192/32=6x6, 224/32=7x7, 240/32=7.5≈8x8
+    reduction_ratio = config.BACKBONE_REDUCTION_RATIOS.get(backbone_name, 32)
+    backbone_output_size = input_shape[0] // reduction_ratio
     
-    # 4. Tête de déconvolution pour upsampler vers la taille des heatmaps
+    print(f"📐 Sortie backbone: ~{backbone_output_size}x{backbone_output_size}")
+    print(f"🎯 Cible heatmaps: {config.HEATMAP_SIZE[0]}x{config.HEATMAP_SIZE[1]}")
     
-    # Première upsampling: 6x6 -> 12x12
+    # 5. Calculer le nombre d'upsampling nécessaires
+    # Pour passer de backbone_output_size à HEATMAP_SIZE (48x48)
+    # On fait 3 upsampling x2 : 6→12→24→48 ou 7→14→28→56 (puis on ajuste)
+    
+    # Première upsampling: x2
     x = layers.Conv2DTranspose(256, (3, 3), strides=(2, 2), padding='same', name='upsample_1')(x)
     x = layers.BatchNormalization(name='bn_1')(x)
     x = layers.ReLU(name='relu_1')(x)
     
-    # Deuxième upsampling: 12x12 -> 24x24
+    # Deuxième upsampling: x2
     x = layers.Conv2DTranspose(128, (3, 3), strides=(2, 2), padding='same', name='upsample_2')(x)
     x = layers.BatchNormalization(name='bn_2')(x)
     x = layers.ReLU(name='relu_2')(x)
     
-    # Troisième upsampling: 24x24 -> 48x48
+    # Troisième upsampling: x2
     x = layers.Conv2DTranspose(64, (3, 3), strides=(2, 2), padding='same', name='upsample_3')(x)
     x = layers.BatchNormalization(name='bn_3')(x)
     x = layers.ReLU(name='relu_3')(x)
     
-    # 5. Couche finale pour prédire les heatmaps
-    # On utilise une Conv2D avec activation sigmoid pour avoir des valeurs entre 0 et 1
+    # 6. Ajuster à la taille exacte des heatmaps si nécessaire
+    # Utiliser Resizing pour garantir la taille exacte
+    current_size = backbone_output_size * 8  # Après 3 upsampling x2
+    if current_size != config.HEATMAP_SIZE[0]:
+        x = layers.Resizing(
+            config.HEATMAP_SIZE[0], 
+            config.HEATMAP_SIZE[1], 
+            interpolation='bilinear',
+            name='resize_to_heatmap_size'
+        )(x)
+        print(f"🔧 Redimensionnement: {current_size}x{current_size} → {config.HEATMAP_SIZE[0]}x{config.HEATMAP_SIZE[1]}")
+    
+    # 7. Couche finale pour prédire les heatmaps
+    # Conv2D avec activation sigmoid pour avoir des valeurs entre 0 et 1
     outputs = layers.Conv2D(num_keypoints, (1, 1), padding='same', activation='sigmoid', name='heatmaps')(x)
     
-    # 6. Créer le modèle
-    model = Model(inputs=inputs, outputs=outputs, name='pose_estimation_model')
+    # 8. Créer le modèle
+    model = Model(inputs=inputs, outputs=outputs, name=f'pose_estimation_{backbone_name}')
     
     return model
 

@@ -87,16 +87,17 @@ class AdvancedDataGenerator(keras.utils.Sequence):
     
     def __getitem__(self, idx):
         batch_indices = self.indices[idx * self.batch_size:(idx + 1) * self.batch_size]
-        X_batch = self.X[batch_indices]
-        y_batch = self.y[batch_indices]
+        X_batch = self.X[batch_indices].copy()
+        y_batch = self.y[batch_indices].copy()
         
-        # Apply augmentation randomly
-        if self.use_mixup and np.random.rand() < 0.5:
+        # Apply augmentation randomly (pas en même temps)
+        rand_val = np.random.rand()
+        if self.use_mixup and rand_val < 0.3:
             X_batch, y_batch = mixup(X_batch, y_batch, self.mixup_alpha)
-        elif self.use_cutmix and np.random.rand() < 0.5:
+        elif self.use_cutmix and rand_val < 0.6:
             X_batch, y_batch = cutmix(X_batch, y_batch, self.cutmix_alpha)
             
-        return X_batch, y_batch
+        return X_batch.astype(np.float32), y_batch.astype(np.float32)
     
     def on_epoch_end(self):
         np.random.shuffle(self.indices)
@@ -168,7 +169,7 @@ class GradientAccumulation(Callback):
 
 def progressive_unfreeze_training(model, X_train, y_train, X_val, y_val, model_name="pose_model", 
                                  model_dir=None, use_advanced_aug=True, use_swa=True, 
-                                 use_mixed_precision=True, use_gradient_clip=True):
+                                 use_mixed_precision=False, use_gradient_clip=True):
     """
     Entraînement en 3 phases avec techniques avancées
     
@@ -296,7 +297,7 @@ def progressive_unfreeze_training(model, X_train, y_train, X_val, y_val, model_n
         history2 = model.fit(
             train_gen,
             validation_data=(X_val, y_val),
-            epochs=20,
+            epochs=15,
             callbacks=callbacks_phase2,
             verbose=1
         )
@@ -307,7 +308,7 @@ def progressive_unfreeze_training(model, X_train, y_train, X_val, y_val, model_n
             history2 = model.fit(
                 train_gen,
                 validation_data=(X_val, y_val),
-                epochs=20,
+                epochs=15,
                 callbacks=callbacks_phase2,
                 verbose=1,
                 steps_per_epoch=len(X_train) // config.BATCH_SIZE
@@ -338,7 +339,7 @@ def progressive_unfreeze_training(model, X_train, y_train, X_val, y_val, model_n
     
     # Learning rate ultra-fin avec AdamW (weight decay)
     optimizer3 = keras.optimizers.AdamW(
-        learning_rate=config.LEARNING_RATE / 100,
+        learning_rate=config.LEARNING_RATE / 50,  # 2e-6 au lieu de 1e-6
         weight_decay=0.0001,
         clipnorm=0.3 if use_gradient_clip else None
     )
@@ -350,49 +351,21 @@ def progressive_unfreeze_training(model, X_train, y_train, X_val, y_val, model_n
     )
     
     # Cosine Annealing avec minimum LR
-    scheduler3 = create_cosine_annealing_scheduler(config.LEARNING_RATE / 100, total_epochs=30, warmup_epochs=2)
+    scheduler3 = create_cosine_annealing_scheduler(config.LEARNING_RATE / 50, total_epochs=30, warmup_epochs=2)
     callbacks_phase3 = callbacks_base + [scheduler3]
     if use_swa:
         callbacks_phase3 = callbacks_phase3 + [swa_callback]
     
-    if use_advanced_aug:
-        # Augmentation plus légère pour phase finale
-        train_gen = AdvancedDataGenerator(
-            X_train, y_train, 
-            batch_size=config.BATCH_SIZE,
-            use_mixup=True,
-            use_cutmix=False,  # Seulement Mixup en phase 3
-            mixup_alpha=0.1,
-            cutmix_alpha=0.0
-        )
-        history3 = model.fit(
-            train_gen,
-            validation_data=(X_val, y_val),
-            epochs=30,
-            callbacks=callbacks_phase3,
-            verbose=1
-        )
-    else:
-        augmentation = create_data_augmentation()
-        if augmentation:
-            train_gen = augmentation.flow(X_train, y_train, batch_size=config.BATCH_SIZE)
-            history3 = model.fit(
-                train_gen,
-                validation_data=(X_val, y_val),
-                epochs=30,
-                callbacks=callbacks_phase3,
-                verbose=1,
-                steps_per_epoch=len(X_train) // config.BATCH_SIZE
-            )
-        else:
-            history3 = model.fit(
-                X_train, y_train,
-                validation_data=(X_val, y_val),
-                batch_size=config.BATCH_SIZE,
-                epochs=30,
-                callbacks=callbacks_phase3,
-                verbose=1
-            )
+    # Phase 3 : entraînement simple sans augmentation avancée (plus stable)
+    print("⚠️  Augmentation désactivée en Phase 3 pour stabilité")
+    history3 = model.fit(
+        X_train, y_train,
+        validation_data=(X_val, y_val),
+        batch_size=config.BATCH_SIZE,
+        epochs=25,
+        callbacks=callbacks_phase3,
+        verbose=1
+    )
     
     print("\n✅ Phase 3 terminée")
     metrics3 = evaluate_model(model, X_val, y_val)
@@ -417,17 +390,17 @@ def progressive_unfreeze_training(model, X_train, y_train, X_val, y_val, model_n
     print(f"   - Loss: {metrics1['loss']:.6f}")
     print(f"   - MAE: {metrics1['mae']:.6f}")
     
-    print(f"\n📈 Phase 2 (Dégel partiel - 20 epochs):")
+    print(f"\n📈 Phase 2 (Dégel partiel - 15 epochs):")
     print(f"   - Loss: {metrics2['loss']:.6f}")
     print(f"   - MAE: {metrics2['mae']:.6f}")
     print(f"   - Amélioration: {((metrics1['mae'] - metrics2['mae']) / metrics1['mae'] * 100):.1f}%")
     
-    print(f"\n📈 Phase 3 (Fine-tuning complet - 30 epochs):")
+    print(f"\n📈 Phase 3 (Fine-tuning complet - 25 epochs):")
     print(f"   - Loss: {metrics3['loss']:.6f}")
     print(f"   - MAE: {metrics3['mae']:.6f}")
     print(f"   - Amélioration totale: {((metrics1['mae'] - metrics3['mae']) / metrics1['mae'] * 100):.1f}%")
     
-    print(f"\n🎯 Total epochs: 70")
+    print(f"\n🎯 Total epochs: 60 (20+15+25)")
     print(f"🎯 MAE finale: {metrics3['mae']:.6f} pixels")
     print(f"🎯 Gain vs Phase 1: {((metrics1['mae'] - metrics3['mae']) / metrics1['mae'] * 100):.1f}%")
     
@@ -452,14 +425,13 @@ def progressive_unfreeze_training(model, X_train, y_train, X_val, y_val, model_n
 if __name__ == "__main__":
     print("=" * 60)
     print("✅ Module advanced_training.py chargé")
-    print("=" * 60)
+    print("=")
     print("\n🚀 TECHNIQUES AVANCÉES DISPONIBLES:")
     print("   ✓ Mixup & CutMix Augmentation")
     print("   ✓ Cosine Annealing avec Warmup")
     print("   ✓ Stochastic Weight Averaging (SWA)")
-    print("   ✓ Mixed Precision Training (FP16)")
     print("   ✓ Gradient Clipping Adaptatif")
     print("   ✓ AdamW avec Weight Decay")
-    print("   ✓ Entraînement progressif 3 phases (70 epochs)")
+    print("   ✓ Entraînement progressif 3 phases (60 epochs total)")
     print("\n📝 Utilisez main.py avec l'option --advanced-training")
     print("=" * 60)

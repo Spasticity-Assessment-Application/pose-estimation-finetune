@@ -89,7 +89,7 @@ def main(args):
                 model_dir=model_dir,
                 use_advanced_aug=True,
                 use_swa=True,
-                use_mixed_precision=True,
+                use_mixed_precision=False,  # Désactivé pour éviter blocages
                 use_gradient_clip=True
             )
             final_model_path, saved_model_dir = save_final_model(model, model_name, model_dir)

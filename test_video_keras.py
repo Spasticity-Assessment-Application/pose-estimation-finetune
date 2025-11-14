@@ -18,6 +18,32 @@ def load_keras_model(model_path):
     return model
 
 
+def get_model_input_size(model):
+    """Extrait la taille d'entrée attendue par le modèle"""
+    try:
+        input_shape = model.input_shape
+        # Format attendu: (batch, height, width, channels)
+        height = input_shape[1]
+        width = input_shape[2]
+        return (width, height)
+    except:
+        # Fallback pour MobileNetV2 et modèles anciens
+        return (192, 192)
+
+
+def get_model_input_size(model):
+    """Extrait la taille d'entrée attendue par le modèle"""
+    try:
+        input_shape = model.input_shape
+        # Format attendu: (batch, height, width, channels)
+        height = input_shape[1]
+        width = input_shape[2]
+        return (width, height)
+    except:
+        # Fallback pour MobileNetV2 et modèles anciens
+        return (192, 192)
+
+
 def preprocess_frame(frame, input_size=(192, 192)):
     """Prétraite une frame pour le modèle"""
     frame_resized = cv2.resize(frame, input_size)
@@ -26,9 +52,9 @@ def preprocess_frame(frame, input_size=(192, 192)):
     return frame_batch
 
 
-def predict_frame(model, frame):
+def predict_frame(model, frame, input_size):
     """Fait une prédiction sur une frame"""
-    input_data = preprocess_frame(frame)
+    input_data = preprocess_frame(frame, input_size)
     heatmaps = model.predict(input_data, verbose=0)[0]
     return heatmaps
 
@@ -91,6 +117,10 @@ def process_video(video_path, model_path, output_path=None):
 
     # Charger le modèle
     model = load_keras_model(model_path)
+    
+    # Détecter la taille d'entrée du modèle
+    input_size = get_model_input_size(model)
+    print(f"📊 Taille d'entrée du modèle: {input_size[0]}x{input_size[1]}")
 
     # Ouvrir la vidéo
     cap = cv2.VideoCapture(video_path)
@@ -128,7 +158,7 @@ def process_video(video_path, model_path, output_path=None):
             break
 
         # Prédiction
-        heatmaps = predict_frame(model, frame)
+        heatmaps = predict_frame(model, frame, input_size)
 
         # Extraire keypoints
         keypoints = extract_keypoints_from_heatmaps(heatmaps, (height, width))

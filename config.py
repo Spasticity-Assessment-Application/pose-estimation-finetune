@@ -87,12 +87,12 @@ NORMALIZE = True
 
 # Entraînement
 TRAIN_SPLIT = 0.8
-BATCH_SIZE = 16
+BATCH_SIZE = 32  # ⬆️ Augmenté de 16 à 32 pour meilleure stabilité
 EPOCHS = 100
-LEARNING_RATE = 1e-3
+LEARNING_RATE = 1e-4  # ⬇️ Réduit de 1e-3 à 1e-4 pour fine-tuning plus fin
 OPTIMIZER = "adam"
-EARLY_STOPPING_PATIENCE = 15
-REDUCE_LR_PATIENCE = 5
+EARLY_STOPPING_PATIENCE = 25  # ⬆️ Augmenté de 15 à 25 pour laisser plus de temps
+REDUCE_LR_PATIENCE = 8  # ⬆️ Augmenté de 5 à 8
 REDUCE_LR_FACTOR = 0.5
 RANDOM_SEED = 42
 
@@ -148,11 +148,12 @@ TFLITE_MODEL_NAME = "pose_model_quantized.tflite"
 # Augmentation
 USE_AUGMENTATION = True
 AUGMENTATION_CONFIG = {
-    "rotation_range": 15,
-    "width_shift_range": 0.1,
-    "height_shift_range": 0.1,
-    "zoom_range": 0.1,
+    "rotation_range": 25,  # ⬆️ Augmenté de 15 à 25 degrés
+    "width_shift_range": 0.15,  # ⬆️ Augmenté de 0.1 à 0.15
+    "height_shift_range": 0.15,  # ⬆️ Augmenté de 0.1 à 0.15
+    "zoom_range": 0.15,  # ⬆️ Augmenté de 0.1 à 0.15
     "horizontal_flip": True,
+    "brightness_range": [0.8, 1.2],  # ✨ NOUVEAU: variations d'éclairage
     "fill_mode": "nearest"
 }
 

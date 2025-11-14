@@ -27,9 +27,18 @@ def preprocess_frame(frame, input_size=(192, 192)):
     return frame_batch
 
 
-def predict_frame(interpreter, input_details, output_details, frame):
+def get_model_input_size(input_details):
+    """Extrait la taille d'entrée attendue par le modèle"""
+    input_shape = input_details[0]['shape']
+    # Format attendu: [batch, height, width, channels]
+    height = input_shape[1]
+    width = input_shape[2]
+    return (width, height)
+
+
+def predict_frame(interpreter, input_details, output_details, frame, input_size):
     """Fait une prédiction sur une frame"""
-    input_data = preprocess_frame(frame)
+    input_data = preprocess_frame(frame, input_size)
 
     if input_details[0]['dtype'] == np.uint8:
         input_scale, input_zero_point = input_details[0]['quantization']
@@ -52,15 +61,24 @@ def extract_keypoints_from_heatmaps(heatmaps, frame_shape):
     h, w = frame_shape[:2]
     keypoints = []
     
+    # Debug: afficher la forme et les valeurs des heatmaps
+    print(f"🔍 Debug - Heatmaps shape: {heatmaps.shape}, min: {heatmaps.min():.4f}, max: {heatmaps.max():.4f}")
+    
     for i in range(heatmaps.shape[-1]):
         heatmap = heatmaps[:, :, i]
+        
+        print(f"  Keypoint {i} - heatmap shape: {heatmap.shape}, min: {heatmap.min():.4f}, max: {heatmap.max():.4f}")
         
         # Trouver le maximum
         max_pos = np.unravel_index(heatmap.argmax(), heatmap.shape)
         
+        print(f"  Max position dans heatmap: {max_pos}")
+        
         # Convertir en coordonnées de l'image
         y = int(max_pos[0] * h / heatmap.shape[0])
         x = int(max_pos[1] * w / heatmap.shape[1])
+        
+        print(f"  Coordonnées finales: x={x}, y={y} (frame: {w}x{h})")
         
         # Confiance (valeur du pic)
         confidence = heatmap[max_pos]
@@ -114,7 +132,10 @@ def process_video(video_path, model_path, output_path=None, display=True):
     # Charger le modèle
     print("\n🔄 Chargement du modèle...")
     interpreter, input_details, output_details = load_tflite_model(model_path)
-    print("✅ Modèle chargé")
+    
+    # Détecter la taille d'entrée du modèle
+    input_size = get_model_input_size(input_details)
+    print(f"✅ Modèle chargé (entrée: {input_size[0]}x{input_size[1]})")
     
     # Ouvrir la vidéo
     cap = cv2.VideoCapture(video_path)
@@ -154,7 +175,7 @@ def process_video(video_path, model_path, output_path=None, display=True):
             frame_count += 1
             
             # Prédiction
-            heatmaps = predict_frame(interpreter, input_details, output_details, frame)
+            heatmaps = predict_frame(interpreter, input_details, output_details, frame, input_size)
             
             # Extraire les keypoints
             keypoints = extract_keypoints_from_heatmaps(heatmaps, frame.shape)

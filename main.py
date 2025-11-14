@@ -10,6 +10,7 @@ from data_preprocessing import prepare_data
 from model import create_model
 from train import train_model, save_final_model, evaluate_model, plot_training_history
 from export_tflite import export_model, test_tflite_model
+import advanced_training
 
 
 def main(args):
@@ -75,9 +76,27 @@ def main(args):
         print("\nÉTAPE 3/4 - ENTRAÎNEMENT")
         model_name = "pose_model"  # Nom simplifié car le dossier contient déjà la date/backbone
 
-        history = train_model(model=model, X_train=X_train, y_train=y_train, X_val=X_val, y_val=y_val, model_name=model_name, model_dir=model_dir)
-        final_model_path, saved_model_dir = save_final_model(model, model_name, model_dir)
-        metrics = evaluate_model(model, X_val, y_val)
+        if args.advanced_training:
+            print("\n🚀 MODE ENTRAÎNEMENT AVANCÉ ACTIVÉ")
+            print("=" * 60)
+            history, metrics = advanced_training.progressive_unfreeze_training(
+                model=model,
+                X_train=X_train,
+                y_train=y_train,
+                X_val=X_val,
+                y_val=y_val,
+                model_name=model_name,
+                model_dir=model_dir,
+                use_advanced_aug=True,
+                use_swa=True,
+                use_mixed_precision=True,
+                use_gradient_clip=True
+            )
+            final_model_path, saved_model_dir = save_final_model(model, model_name, model_dir)
+        else:
+            history = train_model(model=model, X_train=X_train, y_train=y_train, X_val=X_val, y_val=y_val, model_name=model_name, model_dir=model_dir)
+            final_model_path, saved_model_dir = save_final_model(model, model_name, model_dir)
+            metrics = evaluate_model(model, X_val, y_val)
 
         if args.plot_history:
             plot_path = os.path.join(logs_dir, f"{model_name}_history.png")
@@ -158,6 +177,11 @@ def parse_arguments():
         '--save-data',
         action='store_true',
         help="Sauvegarder les données prétraitées"
+    )
+    parser.add_argument(
+        '--advanced-training',
+        action='store_true',
+        help="Utiliser l'entraînement avancé (Mixup, CutMix, SWA, Mixed Precision, 70 epochs)"
     )
     parser.add_argument(
         '--plot-history',

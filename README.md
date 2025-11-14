@@ -30,11 +30,17 @@ pip install -r requirements.txt
 # Avec MobileNetV2 (défaut - rapide et léger)
 python main.py --save-data
 
+# 🚀 Avec entraînement ULTRA-OPTIMISÉ (RECOMMANDÉ - 70 epochs, Mixup, CutMix, SWA, Mixed Precision)
+python main.py --save-data --advanced-training
+
 # Avec EfficientNetLite (meilleure précision, optimisé mobile)
 python main.py --save-data --backbone EfficientNetLite0
 
 # Avec EfficientNetV2 (haute précision)
 python main.py --save-data --backbone EfficientNetV2B0
+
+# Combinaison backbone + entraînement avancé
+python main.py --save-data --backbone EfficientNetLite0 --advanced-training
 ```
 
 ### Utiliser un modèle déjà entraîné

@@ -27,40 +27,44 @@ def mixup(x, y, alpha=0.2):
 
 
 def cutmix(x, y, alpha=1.0):
-    """CutMix augmentation pour heatmaps"""
-    batch_size = tf.shape(x)[0]
-    img_h, img_w = tf.shape(x)[1], tf.shape(x)[2]
+    """CutMix augmentation pour heatmaps - Version simplifiée et stable"""
+    # Convertir en numpy pour éviter les problèmes TensorFlow
+    x_np = x.numpy() if hasattr(x, 'numpy') else x
+    y_np = y.numpy() if hasattr(y, 'numpy') else y
+    
+    batch_size = x_np.shape[0]
+    img_h, img_w = x_np.shape[1], x_np.shape[2]
     
     # Lambda value
-    lam = tf.random.uniform([], 0, alpha)
+    lam = np.random.beta(alpha, alpha)
     
     # Random box
-    cut_ratio = tf.sqrt(1.0 - lam)
-    cut_h = tf.cast(cut_ratio * tf.cast(img_h, tf.float32), tf.int32)
-    cut_w = tf.cast(cut_ratio * tf.cast(img_w, tf.float32), tf.int32)
+    cut_ratio = np.sqrt(1.0 - lam)
+    cut_h = int(img_h * cut_ratio)
+    cut_w = int(img_w * cut_ratio)
     
-    cx = tf.random.uniform([], 0, img_w, dtype=tf.int32)
-    cy = tf.random.uniform([], 0, img_h, dtype=tf.int32)
+    # Random center point
+    cx = np.random.randint(0, img_w)
+    cy = np.random.randint(0, img_h)
     
-    x1 = tf.clip_by_value(cx - cut_w // 2, 0, img_w)
-    y1 = tf.clip_by_value(cy - cut_h // 2, 0, img_h)
-    x2 = tf.clip_by_value(cx + cut_w // 2, 0, img_w)
-    y2 = tf.clip_by_value(cy + cut_h // 2, 0, img_h)
+    # Box coordinates
+    x1 = np.clip(cx - cut_w // 2, 0, img_w)
+    y1 = np.clip(cy - cut_h // 2, 0, img_h)
+    x2 = np.clip(cx + cut_w // 2, 0, img_w)
+    y2 = np.clip(cy + cut_h // 2, 0, img_h)
     
-    # Shuffle and mix
-    indices = tf.random.shuffle(tf.range(batch_size))
-    mask = tf.ones_like(x)
-    mask = tf.tensor_scatter_nd_update(
-        mask,
-        tf.stack([tf.tile([[i]], [1, 1]) for i in range(batch_size)], axis=0),
-        tf.zeros([batch_size, y2-y1, x2-x1, tf.shape(x)[-1]])
-    )
+    # Shuffle indices
+    indices = np.random.permutation(batch_size)
     
-    x_mixed = x * mask + tf.gather(x, indices) * (1 - mask)
+    # Mix images
+    x_mixed = x_np.copy()
+    x_mixed[:, y1:y2, x1:x2, :] = x_np[indices, y1:y2, x1:x2, :]
     
     # Adjust lambda based on actual cut area
-    lam_adjusted = 1 - (tf.cast((x2-x1) * (y2-y1), tf.float32) / tf.cast(img_h * img_w, tf.float32))
-    y_mixed = lam_adjusted * y + (1 - lam_adjusted) * tf.gather(y, indices)
+    lam_adjusted = 1 - ((x2 - x1) * (y2 - y1)) / (img_h * img_w)
+    
+    # Mix labels
+    y_mixed = lam_adjusted * y_np + (1 - lam_adjusted) * y_np[indices]
     
     return x_mixed, y_mixed
 

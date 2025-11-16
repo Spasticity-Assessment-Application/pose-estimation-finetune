@@ -240,7 +240,7 @@ def progressive_unfreeze_training(model, X_train, y_train, X_val, y_val, model_n
             X_train, y_train,
             validation_data=(X_val, y_val),
             batch_size=config.BATCH_SIZE,
-            epochs=15,
+            epochs=25,
             callbacks=callbacks_phase1,
             verbose=1
         )
@@ -269,7 +269,7 @@ def progressive_unfreeze_training(model, X_train, y_train, X_val, y_val, model_n
     
     # Optimizer avec learning rate adaptatif
     optimizer2 = keras.optimizers.Adam(
-        learning_rate=config.LEARNING_RATE / 10,
+        learning_rate=config.LEARNING_RATE / 10,  # Retour à 1e-5 (plus stable)
         clipnorm=0.5 if use_gradient_clip else None
     )
     
@@ -279,8 +279,8 @@ def progressive_unfreeze_training(model, X_train, y_train, X_val, y_val, model_n
         metrics=['mae']
     )
     
-    # Cosine Annealing
-    scheduler2 = create_cosine_annealing_scheduler(config.LEARNING_RATE / 10, total_epochs=20, warmup_epochs=3)
+    # Cosine Annealing avec warmup plus long
+    scheduler2 = create_cosine_annealing_scheduler(config.LEARNING_RATE / 10, total_epochs=15, warmup_epochs=5)  # Warmup de 2→5
     callbacks_phase2 = callbacks_base + [scheduler2]
     if use_swa:
         callbacks_phase2 = callbacks_phase2 + [swa_callback]
@@ -290,14 +290,14 @@ def progressive_unfreeze_training(model, X_train, y_train, X_val, y_val, model_n
             X_train, y_train, 
             batch_size=config.BATCH_SIZE,
             use_mixup=True,
-            use_cutmix=True,
-            mixup_alpha=0.15,
-            cutmix_alpha=0.8
+            use_cutmix=False,  # Désactiver CutMix en Phase 2
+            mixup_alpha=0.1,
+            cutmix_alpha=0.0
         )
         history2 = model.fit(
             train_gen,
             validation_data=(X_val, y_val),
-            epochs=15,
+            epochs=20,  # Augmenté pour meilleure convergence
             callbacks=callbacks_phase2,
             verbose=1
         )
@@ -308,7 +308,7 @@ def progressive_unfreeze_training(model, X_train, y_train, X_val, y_val, model_n
             history2 = model.fit(
                 train_gen,
                 validation_data=(X_val, y_val),
-                epochs=15,
+                epochs=20,
                 callbacks=callbacks_phase2,
                 verbose=1,
                 steps_per_epoch=len(X_train) // config.BATCH_SIZE
@@ -339,7 +339,7 @@ def progressive_unfreeze_training(model, X_train, y_train, X_val, y_val, model_n
     
     # Learning rate ultra-fin avec AdamW (weight decay)
     optimizer3 = keras.optimizers.AdamW(
-        learning_rate=config.LEARNING_RATE / 50,  # 2e-6 au lieu de 1e-6
+        learning_rate=config.LEARNING_RATE / 100,  # 1e-6 ultra-stable
         weight_decay=0.0001,
         clipnorm=0.3 if use_gradient_clip else None
     )
@@ -362,7 +362,7 @@ def progressive_unfreeze_training(model, X_train, y_train, X_val, y_val, model_n
         X_train, y_train,
         validation_data=(X_val, y_val),
         batch_size=config.BATCH_SIZE,
-        epochs=25,
+        epochs=25,  # Augmenté car LR très faible
         callbacks=callbacks_phase3,
         verbose=1
     )
@@ -386,11 +386,11 @@ def progressive_unfreeze_training(model, X_train, y_train, X_val, y_val, model_n
         if use_gradient_clip:
             print("   - Gradient Clipping")
     
-    print(f"\n📈 Phase 1 (Tête seule - 20 epochs):")
+    print(f"\n📈 Phase 1 (Tête seule - 25 epochs):")
     print(f"   - Loss: {metrics1['loss']:.6f}")
     print(f"   - MAE: {metrics1['mae']:.6f}")
     
-    print(f"\n📈 Phase 2 (Dégel partiel - 15 epochs):")
+    print(f"\n📈 Phase 2 (Dégel partiel - 20 epochs):")
     print(f"   - Loss: {metrics2['loss']:.6f}")
     print(f"   - MAE: {metrics2['mae']:.6f}")
     print(f"   - Amélioration: {((metrics1['mae'] - metrics2['mae']) / metrics1['mae'] * 100):.1f}%")
@@ -400,7 +400,7 @@ def progressive_unfreeze_training(model, X_train, y_train, X_val, y_val, model_n
     print(f"   - MAE: {metrics3['mae']:.6f}")
     print(f"   - Amélioration totale: {((metrics1['mae'] - metrics3['mae']) / metrics1['mae'] * 100):.1f}%")
     
-    print(f"\n🎯 Total epochs: 60 (20+15+25)")
+    print(f"\n🎯 Total epochs: 70 (25+20+25)")
     print(f"🎯 MAE finale: {metrics3['mae']:.6f} pixels")
     print(f"🎯 Gain vs Phase 1: {((metrics1['mae'] - metrics3['mae']) / metrics1['mae'] * 100):.1f}%")
     
@@ -432,6 +432,6 @@ if __name__ == "__main__":
     print("   ✓ Stochastic Weight Averaging (SWA)")
     print("   ✓ Gradient Clipping Adaptatif")
     print("   ✓ AdamW avec Weight Decay")
-    print("   ✓ Entraînement progressif 3 phases (60 epochs total)")
+    print("   ✓ Entraînement progressif 3 phases (70 epochs - warmup optimisé)")
     print("\n📝 Utilisez main.py avec l'option --advanced-training")
     print("=" * 60)

@@ -291,43 +291,28 @@ def progressive_unfreeze_training(model, X_train, y_train, X_val, y_val, model_n
     if use_swa:
         callbacks_phase2 = callbacks_phase2 + [swa_callback]
     
-    if use_advanced_aug:
-        train_gen = AdvancedDataGenerator(
-            X_train, y_train, 
-            batch_size=config.BATCH_SIZE,
-            use_mixup=True,
-            use_cutmix=False,  # Désactiver CutMix en Phase 2
-            mixup_alpha=0.1,
-            cutmix_alpha=0.0
-        )
+    # Phase 2 : utiliser augmentation standard (générateur Keras) au lieu du custom
+    print("⚠️  Utilisation de l'augmentation standard en Phase 2 (évite bugs tensors)")
+    augmentation = create_data_augmentation()
+    if augmentation:
+        train_gen = augmentation.flow(X_train, y_train, batch_size=config.BATCH_SIZE)
         history2 = model.fit(
             train_gen,
             validation_data=(X_val, y_val),
-            epochs=20,  # Augmenté pour meilleure convergence
+            epochs=20,
+            callbacks=callbacks_phase2,
+            verbose=1,
+            steps_per_epoch=len(X_train) // config.BATCH_SIZE
+        )
+    else:
+        history2 = model.fit(
+            X_train, y_train,
+            validation_data=(X_val, y_val),
+            batch_size=config.BATCH_SIZE,
+            epochs=20,
             callbacks=callbacks_phase2,
             verbose=1
         )
-    else:
-        augmentation = create_data_augmentation()
-        if augmentation:
-            train_gen = augmentation.flow(X_train, y_train, batch_size=config.BATCH_SIZE)
-            history2 = model.fit(
-                train_gen,
-                validation_data=(X_val, y_val),
-                epochs=20,
-                callbacks=callbacks_phase2,
-                verbose=1,
-                steps_per_epoch=len(X_train) // config.BATCH_SIZE
-            )
-        else:
-            history2 = model.fit(
-                X_train, y_train,
-                validation_data=(X_val, y_val),
-                batch_size=config.BATCH_SIZE,
-                epochs=20,
-                callbacks=callbacks_phase2,
-                verbose=1
-            )
     
     print("\n✅ Phase 2 terminée")
     metrics2 = evaluate_model(model, X_val, y_val)

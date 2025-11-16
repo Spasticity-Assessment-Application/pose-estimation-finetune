@@ -87,8 +87,14 @@ class AdvancedDataGenerator(keras.utils.Sequence):
     
     def __getitem__(self, idx):
         batch_indices = self.indices[idx * self.batch_size:(idx + 1) * self.batch_size]
-        X_batch = self.X[batch_indices].copy()
-        y_batch = self.y[batch_indices].copy()
+        
+        # Convertir en numpy si nécessaire
+        if hasattr(self.X, 'numpy'):
+            X_batch = self.X[batch_indices].numpy().copy()
+            y_batch = self.y[batch_indices].numpy().copy()
+        else:
+            X_batch = self.X[batch_indices].copy()
+            y_batch = self.y[batch_indices].copy()
         
         # Apply augmentation randomly (pas en même temps)
         rand_val = np.random.rand()

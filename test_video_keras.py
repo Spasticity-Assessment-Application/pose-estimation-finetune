@@ -11,10 +11,30 @@ import config
 
 
 def load_keras_model(model_path):
-    """Charge le modèle Keras"""
+    """Charge le modèle Keras avec compatibilité TensorFlow 2.15+"""
     print(f"🔄 Chargement du modèle Keras...")
-    model = keras.models.load_model(model_path)
-    print("✅ Modèle chargé")
+    try:
+        # Essayer avec compile=False pour éviter les erreurs de désérialisation
+        model = keras.models.load_model(model_path, compile=False)
+        
+        # Recompiler le modèle si nécessaire
+        model.compile(
+            optimizer=keras.optimizers.Adam(learning_rate=1e-4),
+            loss='mse',
+            metrics=['mae']
+        )
+        print("✅ Modèle chargé et recompilé")
+    except Exception as e:
+        print(f"⚠️  Erreur avec compile=False, essai avec custom_objects...")
+        # Fallback avec custom_objects vide
+        model = keras.models.load_model(model_path, compile=False, custom_objects={})
+        model.compile(
+            optimizer=keras.optimizers.Adam(learning_rate=1e-4),
+            loss='mse',
+            metrics=['mae']
+        )
+        print("✅ Modèle chargé avec custom_objects")
+    
     return model
 
 

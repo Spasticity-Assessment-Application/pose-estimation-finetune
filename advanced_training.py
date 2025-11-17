@@ -269,15 +269,18 @@ def progressive_unfreeze_training(model, X_train, y_train, X_val, y_val, model_n
     augmentation = create_data_augmentation()
     if augmentation:
         train_gen = augmentation.flow(X_train, y_train, batch_size=config.BATCH_SIZE)
+        steps_per_epoch = len(X_train) // config.BATCH_SIZE
+        print(f"📊 Phase 1 - Dataset: {len(X_train)} images, Batch size: {config.BATCH_SIZE}, Steps/epoch: {steps_per_epoch}")
         history1 = model.fit(
             train_gen,
             validation_data=(X_val, y_val),
             epochs=phase1_epochs,
             callbacks=callbacks_phase1,
             verbose=1,
-            steps_per_epoch=len(X_train) // config.BATCH_SIZE
+            steps_per_epoch=steps_per_epoch
         )
     else:
+        print(f"📊 Phase 1 - Dataset: {len(X_train)} images, Batch size: {config.BATCH_SIZE}, Steps/epoch: automatique")
         history1 = model.fit(
             X_train, y_train,
             validation_data=(X_val, y_val),
@@ -336,15 +339,18 @@ def progressive_unfreeze_training(model, X_train, y_train, X_val, y_val, model_n
     augmentation = create_data_augmentation()
     if augmentation:
         train_gen = augmentation.flow(X_train, y_train, batch_size=config.BATCH_SIZE)
+        steps_per_epoch = len(X_train) // config.BATCH_SIZE
+        print(f"📊 Phase 2 - Dataset: {len(X_train)} images, Batch size: {config.BATCH_SIZE}, Steps/epoch: {steps_per_epoch}")
         history2 = model.fit(
             train_gen,
             validation_data=(X_val, y_val),
             epochs=phase2_epochs,
             callbacks=callbacks_phase2,
             verbose=1,
-            steps_per_epoch=len(X_train) // config.BATCH_SIZE
+            steps_per_epoch=steps_per_epoch
         )
     else:
+        print(f"📊 Phase 2 - Dataset: {len(X_train)} images, Batch size: {config.BATCH_SIZE}, Steps/epoch: automatique")
         history2 = model.fit(
             X_train, y_train,
             validation_data=(X_val, y_val),
@@ -393,6 +399,7 @@ def progressive_unfreeze_training(model, X_train, y_train, X_val, y_val, model_n
     
     # Phase 3 : entraînement simple sans augmentation avancée (plus stable)
     print("⚠️  Augmentation désactivée en Phase 3 pour stabilité")
+    print(f"📊 Phase 3 - Dataset: {len(X_train)} images, Batch size: {config.BATCH_SIZE}, Steps/epoch: automatique")
     history3 = model.fit(
         X_train, y_train,
         validation_data=(X_val, y_val),

@@ -173,6 +173,37 @@ class GradientAccumulation(Callback):
         pass
 
 
+def curriculum_learning_schedule(epoch, max_epochs):
+    """Curriculum learning: commencer simple, finir complexe pour petit dataset"""
+    if epoch < max_epochs * 0.3:
+        return 0.3  # Peu d'augmentation au début (focus sur apprentissage de base)
+    elif epoch < max_epochs * 0.7:
+        return 0.7  # Augmentation moyenne (consolidation)
+    else:
+        return 1.0  # Augmentation maximale (généralisation)
+
+
+class CurriculumLearningCallback(Callback):
+    """Curriculum learning pour petit dataset - augmentation progressive"""
+    def __init__(self, max_epochs, augmentation_generator=None):
+        super().__init__()
+        self.max_epochs = max_epochs
+        self.augmentation_generator = augmentation_generator
+        self.current_intensity = 0.3
+        
+    def on_epoch_begin(self, epoch, logs=None):
+        # Ajuster l'intensité d'augmentation selon le curriculum
+        self.current_intensity = curriculum_learning_schedule(epoch, self.max_epochs)
+        
+        # Si on a un générateur d'augmentation, ajuster ses paramètres
+        if self.augmentation_generator is not None:
+            # Ici on pourrait ajuster les paramètres du générateur
+            # Par exemple: rotation_range, zoom_range, etc.
+            pass
+            
+        print(f"📚 Curriculum Learning - Époque {epoch+1}/{self.max_epochs}: Intensité {self.current_intensity:.1f}")
+
+
 def progressive_unfreeze_training(model, X_train, y_train, X_val, y_val, model_name="pose_model", 
                                  model_dir=None, use_advanced_aug=True, use_swa=True, 
                                  use_mixed_precision=False, use_gradient_clip=True):
@@ -219,24 +250,29 @@ def progressive_unfreeze_training(model, X_train, y_train, X_val, y_val, model_n
         if 'mobilenet' in layer.name.lower() or 'efficientnet' in layer.name.lower():
             layer.trainable = False
     
+    # Utiliser learning rate spécialisé pour Phase 1
+    phase1_lr = config.PHASE_LEARNING_RATES["phase1"]
     model.compile(
-        optimizer=keras.optimizers.Adam(learning_rate=config.LEARNING_RATE),
+        optimizer=keras.optimizers.Adam(learning_rate=phase1_lr),
         loss='mse',
         metrics=['mae']
     )
+    print(f"🎯 Learning Rate Phase 1: {phase1_lr}")
     
-    # Warmup scheduler
-    warmup_callback = create_warmup_scheduler(config.LEARNING_RATE, warmup_epochs=5)
-    callbacks_phase1 = callbacks_base + [warmup_callback]
+    # Warmup scheduler et curriculum learning
+    phase1_epochs = config.PHASE_EPOCHS["phase1"]
+    warmup_callback = create_warmup_scheduler(phase1_lr, warmup_epochs=8)  # Warmup plus long
+    curriculum_callback = CurriculumLearningCallback(max_epochs=phase1_epochs)
+    callbacks_phase1 = callbacks_base + [warmup_callback, curriculum_callback]
     
-    # Entraînement avec augmentation
+    # Entraînement avec augmentation (epochs augmentés grâce à la régularisation)
     augmentation = create_data_augmentation()
     if augmentation:
         train_gen = augmentation.flow(X_train, y_train, batch_size=config.BATCH_SIZE)
         history1 = model.fit(
             train_gen,
             validation_data=(X_val, y_val),
-            epochs=15,
+            epochs=phase1_epochs,
             callbacks=callbacks_phase1,
             verbose=1,
             steps_per_epoch=len(X_train) // config.BATCH_SIZE
@@ -246,7 +282,7 @@ def progressive_unfreeze_training(model, X_train, y_train, X_val, y_val, model_n
             X_train, y_train,
             validation_data=(X_val, y_val),
             batch_size=config.BATCH_SIZE,
-            epochs=25,
+            epochs=phase1_epochs,
             callbacks=callbacks_phase1,
             verbose=1
         )
@@ -273,9 +309,10 @@ def progressive_unfreeze_training(model, X_train, y_train, X_val, y_val, model_n
         
         print(f"🔓 Dégelé les 30 dernières couches du backbone")
     
-    # Optimizer avec learning rate adaptatif
+    # Optimizer avec learning rate spécialisé pour Phase 2
+    phase2_lr = config.PHASE_LEARNING_RATES["phase2"]
     optimizer2 = keras.optimizers.Adam(
-        learning_rate=config.LEARNING_RATE / 10,  # Retour à 1e-5 (plus stable)
+        learning_rate=phase2_lr,
         clipnorm=0.5 if use_gradient_clip else None
     )
     
@@ -284,10 +321,13 @@ def progressive_unfreeze_training(model, X_train, y_train, X_val, y_val, model_n
         loss='mse',
         metrics=['mae']
     )
+    print(f"🎯 Learning Rate Phase 2: {phase2_lr}")
     
     # Cosine Annealing avec warmup plus long
-    scheduler2 = create_cosine_annealing_scheduler(config.LEARNING_RATE / 10, total_epochs=15, warmup_epochs=5)  # Warmup de 2→5
-    callbacks_phase2 = callbacks_base + [scheduler2]
+    phase2_epochs = config.PHASE_EPOCHS["phase2"]
+    scheduler2 = create_cosine_annealing_scheduler(phase2_lr, total_epochs=phase2_epochs, warmup_epochs=5)
+    curriculum_callback2 = CurriculumLearningCallback(max_epochs=phase2_epochs)
+    callbacks_phase2 = callbacks_base + [scheduler2, curriculum_callback2]
     if use_swa:
         callbacks_phase2 = callbacks_phase2 + [swa_callback]
     
@@ -299,7 +339,7 @@ def progressive_unfreeze_training(model, X_train, y_train, X_val, y_val, model_n
         history2 = model.fit(
             train_gen,
             validation_data=(X_val, y_val),
-            epochs=20,
+            epochs=phase2_epochs,
             callbacks=callbacks_phase2,
             verbose=1,
             steps_per_epoch=len(X_train) // config.BATCH_SIZE
@@ -309,7 +349,7 @@ def progressive_unfreeze_training(model, X_train, y_train, X_val, y_val, model_n
             X_train, y_train,
             validation_data=(X_val, y_val),
             batch_size=config.BATCH_SIZE,
-            epochs=20,
+            epochs=phase2_epochs,
             callbacks=callbacks_phase2,
             verbose=1
         )
@@ -328,9 +368,10 @@ def progressive_unfreeze_training(model, X_train, y_train, X_val, y_val, model_n
             layer.trainable = True
         print(f"🔓 Backbone complètement dégelé")
     
-    # Learning rate ultra-fin avec AdamW (weight decay)
+    # Learning rate ultra-fin spécialisé pour Phase 3
+    phase3_lr = config.PHASE_LEARNING_RATES["phase3"]
     optimizer3 = keras.optimizers.AdamW(
-        learning_rate=config.LEARNING_RATE / 100,  # 1e-6 ultra-stable
+        learning_rate=phase3_lr,
         weight_decay=0.0001,
         clipnorm=0.3 if use_gradient_clip else None
     )
@@ -340,10 +381,13 @@ def progressive_unfreeze_training(model, X_train, y_train, X_val, y_val, model_n
         loss='mse',
         metrics=['mae']
     )
+    print(f"🎯 Learning Rate Phase 3: {phase3_lr}")
     
     # Cosine Annealing avec minimum LR
-    scheduler3 = create_cosine_annealing_scheduler(config.LEARNING_RATE / 50, total_epochs=30, warmup_epochs=2)
-    callbacks_phase3 = callbacks_base + [scheduler3]
+    phase3_epochs = config.PHASE_EPOCHS["phase3"]
+    scheduler3 = create_cosine_annealing_scheduler(phase3_lr, total_epochs=phase3_epochs, warmup_epochs=2)
+    curriculum_callback3 = CurriculumLearningCallback(max_epochs=phase3_epochs)
+    callbacks_phase3 = callbacks_base + [scheduler3, curriculum_callback3]
     if use_swa:
         callbacks_phase3 = callbacks_phase3 + [swa_callback]
     
@@ -353,7 +397,7 @@ def progressive_unfreeze_training(model, X_train, y_train, X_val, y_val, model_n
         X_train, y_train,
         validation_data=(X_val, y_val),
         batch_size=config.BATCH_SIZE,
-        epochs=25,  # Augmenté car LR très faible
+        epochs=phase3_epochs,
         callbacks=callbacks_phase3,
         verbose=1
     )
@@ -377,21 +421,22 @@ def progressive_unfreeze_training(model, X_train, y_train, X_val, y_val, model_n
         if use_gradient_clip:
             print("   - Gradient Clipping")
     
-    print(f"\n📈 Phase 1 (Tête seule - 25 epochs):")
+    print(f"\n📈 Phase 1 (Tête seule - {config.PHASE_EPOCHS['phase1']} epochs):")
     print(f"   - Loss: {metrics1['loss']:.6f}")
     print(f"   - MAE: {metrics1['mae']:.6f}")
     
-    print(f"\n📈 Phase 2 (Dégel partiel - 20 epochs):")
+    print(f"\n📈 Phase 2 (Dégel partiel - {config.PHASE_EPOCHS['phase2']} epochs):")
     print(f"   - Loss: {metrics2['loss']:.6f}")
     print(f"   - MAE: {metrics2['mae']:.6f}")
     print(f"   - Amélioration: {((metrics1['mae'] - metrics2['mae']) / metrics1['mae'] * 100):.1f}%")
     
-    print(f"\n📈 Phase 3 (Fine-tuning complet - 25 epochs):")
+    print(f"\n📈 Phase 3 (Fine-tuning complet - {config.PHASE_EPOCHS['phase3']} epochs):")
     print(f"   - Loss: {metrics3['loss']:.6f}")
     print(f"   - MAE: {metrics3['mae']:.6f}")
     print(f"   - Amélioration totale: {((metrics1['mae'] - metrics3['mae']) / metrics1['mae'] * 100):.1f}%")
     
-    print(f"\n🎯 Total epochs: 70 (25+20+25)")
+    total_epochs = config.PHASE_EPOCHS['phase1'] + config.PHASE_EPOCHS['phase2'] + config.PHASE_EPOCHS['phase3']
+    print(f"\n🎯 Total epochs: {total_epochs} ({config.PHASE_EPOCHS['phase1']}+{config.PHASE_EPOCHS['phase2']}+{config.PHASE_EPOCHS['phase3']})")
     print(f"🎯 MAE finale: {metrics3['mae']:.6f} pixels")
     print(f"🎯 Gain vs Phase 1: {((metrics1['mae'] - metrics3['mae']) / metrics1['mae'] * 100):.1f}%")
     

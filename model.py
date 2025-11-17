@@ -183,27 +183,29 @@ def build_pose_model(num_keypoints=3, backbone_name="MobileNetV2", input_shape=(
     print(f"📐 Sortie backbone: ~{backbone_output_size}x{backbone_output_size}")
     print(f"🎯 Cible heatmaps: {config.HEATMAP_SIZE[0]}x{config.HEATMAP_SIZE[1]}")
     
-    # 5. Calculer le nombre d'upsampling nécessaires
-    # Pour passer de backbone_output_size à HEATMAP_SIZE (48x48)
-    # On fait 3 upsampling x2 : 6→12→24→48 ou 7→14→28→56 (puis on ajuste)
+    # 5. Tête améliorée avec régularisation renforcée (inspirée DeepLabCut)
     
-    # Première upsampling: x2
-    x = layers.Conv2DTranspose(256, (3, 3), strides=(2, 2), padding='same', name='upsample_1')(x)
+    # Première upsampling: x2 avec régularisation
+    x = layers.Conv2DTranspose(256, (3, 3), strides=(2, 2), padding='same', 
+                              kernel_regularizer=tf.keras.regularizers.l2(0.001), name='upsample_1')(x)
     x = layers.BatchNormalization(name='bn_1')(x)
     x = layers.ReLU(name='relu_1')(x)
+    x = layers.Dropout(0.1, name='dropout_1')(x)  # Régularisation pour petit dataset
     
     # Deuxième upsampling: x2
-    x = layers.Conv2DTranspose(128, (3, 3), strides=(2, 2), padding='same', name='upsample_2')(x)
+    x = layers.Conv2DTranspose(128, (3, 3), strides=(2, 2), padding='same',
+                              kernel_regularizer=tf.keras.regularizers.l2(0.001), name='upsample_2')(x)
     x = layers.BatchNormalization(name='bn_2')(x)
     x = layers.ReLU(name='relu_2')(x)
+    x = layers.Dropout(0.1, name='dropout_2')(x)  # Régularisation
     
     # Troisième upsampling: x2
-    x = layers.Conv2DTranspose(64, (3, 3), strides=(2, 2), padding='same', name='upsample_3')(x)
+    x = layers.Conv2DTranspose(64, (3, 3), strides=(2, 2), padding='same',
+                              kernel_regularizer=tf.keras.regularizers.l2(0.001), name='upsample_3')(x)
     x = layers.BatchNormalization(name='bn_3')(x)
     x = layers.ReLU(name='relu_3')(x)
     
     # 6. Ajuster à la taille exacte des heatmaps si nécessaire
-    # Utiliser Resizing pour garantir la taille exacte
     current_size = backbone_output_size * 8  # Après 3 upsampling x2
     if current_size != config.HEATMAP_SIZE[0]:
         x = layers.Resizing(
@@ -214,9 +216,11 @@ def build_pose_model(num_keypoints=3, backbone_name="MobileNetV2", input_shape=(
         )(x)
         print(f"🔧 Redimensionnement: {current_size}x{current_size} → {config.HEATMAP_SIZE[0]}x{config.HEATMAP_SIZE[1]}")
     
-    # 7. Couche finale pour prédire les heatmaps
-    # Conv2D avec activation sigmoid pour avoir des valeurs entre 0 et 1
-    outputs = layers.Conv2D(num_keypoints, (1, 1), padding='same', activation='sigmoid', name='heatmaps')(x)
+    # 7. Couche finale pour prédire les heatmaps avec régularisation
+    outputs = layers.Conv2D(num_keypoints, (1, 1), padding='same', 
+                           activation='sigmoid', 
+                           kernel_regularizer=tf.keras.regularizers.l2(0.001),
+                           name='heatmaps')(x)
     
     # 8. Créer le modèle
     model = Model(inputs=inputs, outputs=outputs, name=f'pose_estimation_{backbone_name}')
@@ -226,7 +230,7 @@ def build_pose_model(num_keypoints=3, backbone_name="MobileNetV2", input_shape=(
 
 def compile_model(model, learning_rate=1e-4, optimizer_name='adam'):
     """
-    Compile le modèle avec la loss et l'optimiseur
+    Compile le modèle avec la loss et l'optimiseur optimisés pour petit dataset
     
     Args:
         model: Modèle Keras
@@ -236,6 +240,55 @@ def compile_model(model, learning_rate=1e-4, optimizer_name='adam'):
     Returns:
         model: Modèle compilé
     """
+    # Loss composée optimisée pour heatmaps avec petit dataset
+    def heatmap_loss(y_true, y_pred):
+        """Loss composée avec régularisation pour éviter le surapprentissage"""
+        # MSE de base
+        mse_loss = tf.keras.losses.MSE(y_true, y_pred)
+        
+        # Régularisation L2 sur les prédictions (éviter pics dans heatmaps)
+        l2_reg = 0.01 * tf.reduce_mean(tf.square(y_pred))
+        
+        # Label smoothing (éviter sur-confiance, ε=0.05)
+        smoothed_labels = 0.9 * y_true + 0.05
+        smoothed_loss = tf.keras.losses.MSE(smoothed_labels, y_pred)
+        
+        return mse_loss + l2_reg + 0.1 * smoothed_loss
+    
+    # Métrique personnalisée pour la pose
+    def pose_accuracy(y_true, y_pred, threshold=10.0):
+        """Accuracy basée sur la distance des keypoints (threshold en pixels)"""
+        # Convertir heatmaps en coordonnées (trouver max par canal)
+        batch_size = tf.shape(y_pred)[0]
+        num_keypoints = tf.shape(y_pred)[-1]
+        
+        # Reshaper pour traitement
+        pred_flat = tf.reshape(y_pred, [batch_size, -1, num_keypoints])
+        true_flat = tf.reshape(y_true, [batch_size, -1, num_keypoints])
+        
+        # Indices des maxima
+        pred_max_indices = tf.argmax(pred_flat, axis=1)
+        true_max_indices = tf.argmax(true_flat, axis=1)
+        
+        # Convertir indices en coordonnées (x, y)
+        heatmap_size = config.HEATMAP_SIZE[0]  # Assume carré
+        pred_coords = tf.stack([
+            pred_max_indices // heatmap_size,
+            pred_max_indices % heatmap_size
+        ], axis=-1)
+        true_coords = tf.stack([
+            true_max_indices // heatmap_size,
+            true_max_indices % heatmap_size
+        ], axis=-1)
+        
+        # Distance euclidienne
+        distances = tf.sqrt(tf.reduce_sum(tf.square(tf.cast(pred_coords - true_coords, tf.float32)), axis=-1))
+        
+        # Accuracy: keypoints dans le threshold
+        correct = tf.cast(distances < threshold, tf.float32)
+        
+        return tf.reduce_mean(correct)
+    
     # Choisir l'optimiseur
     if optimizer_name.lower() == 'adam':
         optimizer = keras.optimizers.Adam(learning_rate=learning_rate)
@@ -244,11 +297,11 @@ def compile_model(model, learning_rate=1e-4, optimizer_name='adam'):
     else:
         raise ValueError(f"Optimiseur non supporté: {optimizer_name}")
     
-    # Compiler avec MSE loss
+    # Compiler avec loss et métriques optimisées
     model.compile(
         optimizer=optimizer,
-        loss='mse',  # Mean Squared Error entre heatmaps prédites et vraies
-        metrics=['mae']  # Mean Absolute Error comme métrique additionnelle
+        loss=heatmap_loss,
+        metrics=['mae', pose_accuracy]
     )
     
     return model

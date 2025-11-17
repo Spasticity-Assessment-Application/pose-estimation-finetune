@@ -87,14 +87,28 @@ NORMALIZE = True
 
 # Entraînement
 TRAIN_SPLIT = 0.8
-BATCH_SIZE = 32  # ⬆️ Augmenté de 16 à 32 pour meilleure stabilité
+BATCH_SIZE = 8  # ⬇️ Réduit de 32 à 8 pour petit dataset
 EPOCHS = 100
-LEARNING_RATE = 1e-4  # ⬇️ Réduit de 1e-3 à 1e-4 pour fine-tuning plus fin
+LEARNING_RATE = 5e-5  # ⬇️ Réduit de 1e-4 à 5e-5 pour fine-tuning plus fin
 OPTIMIZER = "adam"
-EARLY_STOPPING_PATIENCE = 25  # ⬆️ Augmenté de 15 à 25 pour laisser plus de temps
-REDUCE_LR_PATIENCE = 8  # ⬆️ Augmenté de 5 à 8
+EARLY_STOPPING_PATIENCE = 50  # ⬆️ Augmenté de 25 à 50 pour plus de patience
+REDUCE_LR_PATIENCE = 15  # ⬆️ Augmenté de 8 à 15
 REDUCE_LR_FACTOR = 0.5
 RANDOM_SEED = 42
+
+# Learning rates spécialisés par phase pour petit dataset
+PHASE_LEARNING_RATES = {
+    "phase1": 1e-4,   # Tête seule - plus agressif
+    "phase2": 5e-5,   # Dégel partiel - conservateur
+    "phase3": 1e-5    # Fine-tuning complet - très fin
+}
+
+# Epochs par phase pour entraînement progressif (optimisé pour petit dataset)
+PHASE_EPOCHS = {
+    "phase1": 35,   # Tête seule - temps pour apprendre bases
+    "phase2": 28,   # Dégel partiel - fine-tuning progressif
+    "phase3": 25    # Fine-tuning complet - stabilisation
+}
 
 # Modèle
 BACKBONE = "MobileNetV2"  # Par défaut: MobileNetV2 (rapide, léger, performant)
@@ -148,13 +162,15 @@ TFLITE_MODEL_NAME = "pose_model_quantized.tflite"
 # Augmentation
 USE_AUGMENTATION = True
 AUGMENTATION_CONFIG = {
-    "rotation_range": 25,  # ⬆️ Augmenté de 15 à 25 degrés
-    "width_shift_range": 0.15,  # ⬆️ Augmenté de 0.1 à 0.15
-    "height_shift_range": 0.15,  # ⬆️ Augmenté de 0.1 à 0.15
-    "zoom_range": 0.15,  # ⬆️ Augmenté de 0.1 à 0.15
+    "rotation_range": 30,  # ⬆️ Augmenté de 25 à 30 degrés
+    "width_shift_range": 0.2,  # ⬆️ Augmenté de 0.15 à 0.2
+    "height_shift_range": 0.2,  # ⬆️ Augmenté de 0.15 à 0.2
+    "zoom_range": [0.8, 1.3],  # ✨ Zoom in/out au lieu de range simple
     "horizontal_flip": True,
-    "brightness_range": [0.8, 1.2],  # ✨ NOUVEAU: variations d'éclairage
-    "fill_mode": "nearest"
+    "brightness_range": [0.7, 1.3],  # ⬆️ Étendu de [0.8, 1.2] à [0.7, 1.3]
+    "channel_shift_range": 0.1,  # ✨ NOUVEAU: variations de couleur
+    "shear_range": 5,  # ✨ NOUVEAU: cisaillement
+    "fill_mode": "reflect"  # ⬆️ Changé de nearest à reflect (meilleur)
 }
 
 VERBOSE = 1

@@ -81,33 +81,32 @@ KEYPOINT_INDICES = {
 # Images
 IMAGE_SIZE = (192, 192)
 INPUT_SHAPE = (*IMAGE_SIZE, 3)
-HEATMAP_SIZE = (48, 48)
-HEATMAP_SIGMA = 2.0
+HEATMAP_SIZE = (64, 64)
+HEATMAP_SIGMA = 2.5
 NORMALIZE = True
 
 # Entraînement
 TRAIN_SPLIT = 0.8
-BATCH_SIZE = 8  # ⬇️ Réduit de 32 à 8 pour petit dataset
+BATCH_SIZE = 8
 EPOCHS = 100
-LEARNING_RATE = 5e-5  # ⬇️ Réduit de 1e-4 à 5e-5 pour fine-tuning plus fin
+LEARNING_RATE = 5e-5
 OPTIMIZER = "adam"
-EARLY_STOPPING_PATIENCE = 50  # ⬆️ Augmenté de 25 à 50 pour plus de patience
-REDUCE_LR_PATIENCE = 15  # ⬆️ Augmenté de 8 à 15
+EARLY_STOPPING_PATIENCE = 10
+REDUCE_LR_PATIENCE = 5
 REDUCE_LR_FACTOR = 0.5
 RANDOM_SEED = 42
 
 # Learning rates spécialisés par phase pour petit dataset
 PHASE_LEARNING_RATES = {
-    "phase1": 1e-4,   # Tête seule - plus agressif
-    "phase2": 5e-5,   # Dégel partiel - conservateur
-    "phase3": 1e-5    # Fine-tuning complet - très fin
+    "phase1": 1e-4,
+    "phase2": 5e-5,
+    "phase3": 1e-5
 }
 
-# Epochs par phase pour entraînement progressif (optimisé pour petit dataset)
 PHASE_EPOCHS = {
-    "phase1": 35,   # Tête seule - temps pour apprendre bases
-    "phase2": 28,   # Dégel partiel - fine-tuning progressif
-    "phase3": 25    # Fine-tuning complet - stabilisation
+    "phase1": 50,
+    "phase2": 40,
+    "phase3": 40
 }
 
 # Modèle
@@ -162,15 +161,15 @@ TFLITE_MODEL_NAME = "pose_model_quantized.tflite"
 # Augmentation
 USE_AUGMENTATION = True
 AUGMENTATION_CONFIG = {
-    "rotation_range": 30,  # ⬆️ Augmenté de 25 à 30 degrés
-    "width_shift_range": 0.2,  # ⬆️ Augmenté de 0.15 à 0.2
-    "height_shift_range": 0.2,  # ⬆️ Augmenté de 0.15 à 0.2
-    "zoom_range": [0.8, 1.3],  # ✨ Zoom in/out au lieu de range simple
+    "rotation_range": 25,
+    "width_shift_range": 0.2,
+    "height_shift_range": 0.2,
+    "zoom_range": [0.8, 1.2],
     "horizontal_flip": True,
-    "brightness_range": [0.7, 1.3],  # ⬆️ Étendu de [0.8, 1.2] à [0.7, 1.3]
-    "channel_shift_range": 0.1,  # ✨ NOUVEAU: variations de couleur
-    "shear_range": 5,  # ✨ NOUVEAU: cisaillement
-    "fill_mode": "reflect"  # ⬆️ Changé de nearest à reflect (meilleur)
+    "brightness_range": [0.6, 1.4],
+    "channel_shift_range": 0.0,
+    "shear_range": 0,
+    "fill_mode": "reflect"
 }
 
 VERBOSE = 1

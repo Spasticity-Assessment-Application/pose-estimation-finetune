@@ -242,18 +242,9 @@ def compile_model(model, learning_rate=1e-4, optimizer_name='adam'):
     """
     # Loss composée optimisée pour heatmaps avec petit dataset
     def heatmap_loss(y_true, y_pred):
-        """Loss composée avec régularisation pour éviter le surapprentissage"""
-        # MSE de base
-        mse_loss = tf.keras.losses.MSE(y_true, y_pred)
-        
-        # Régularisation L2 sur les prédictions (éviter pics dans heatmaps)
-        l2_reg = 0.01 * tf.reduce_mean(tf.square(y_pred))
-        
-        # Label smoothing (éviter sur-confiance, ε=0.05)
-        smoothed_labels = 0.9 * y_true + 0.05
-        smoothed_loss = tf.keras.losses.MSE(smoothed_labels, y_pred)
-        
-        return mse_loss + l2_reg + 0.1 * smoothed_loss
+        """Loss MSE standard DeepLabCut"""
+        mse = tf.reduce_mean(tf.square(y_true - y_pred))
+        return mse
     
     # Métrique personnalisée pour la pose
     def pose_accuracy(y_true, y_pred, threshold=10.0):

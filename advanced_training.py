@@ -245,19 +245,18 @@ def progressive_unfreeze_training(model, X_train, y_train, X_val, y_val, model_n
     print("📍 PHASE 1: Entraînement de la tête uniquement")
     print("=" * 60)
     
-    # Geler tout le backbone
+    # Geler 100% du backbone
     for layer in model.layers:
         if 'mobilenet' in layer.name.lower() or 'efficientnet' in layer.name.lower():
             layer.trainable = False
     
-    # Utiliser learning rate spécialisé pour Phase 1
     phase1_lr = config.PHASE_LEARNING_RATES["phase1"]
     model.compile(
         optimizer=keras.optimizers.Adam(learning_rate=phase1_lr),
         loss='mse',
         metrics=['mae']
     )
-    print(f"🎯 Learning Rate Phase 1: {phase1_lr}")
+    print(f"🎯 LR Phase 1: {phase1_lr}")
     
     # Warmup scheduler et curriculum learning
     phase1_epochs = config.PHASE_EPOCHS["phase1"]
@@ -293,12 +292,12 @@ def progressive_unfreeze_training(model, X_train, y_train, X_val, y_val, model_n
     print("\n✅ Phase 1 terminée")
     metrics1 = evaluate_model(model, X_val, y_val)
     
-    # ========== PHASE 2: Dégel partiel ==========
+    # ========== PHASE 2: Dégel partiel ~10% ==========
     print("\n" + "=" * 60)
-    print("📍 PHASE 2: Fine-tuning des dernières couches du backbone")
+    print("📍 PHASE 2: Fine-tuning partiel (10% du backbone)")
     print("=" * 60)
     
-    # Dégeler les 30 dernières couches du backbone
+    # Dégeler seulement les 10 dernières couches du backbone (~10%)
     backbone_layer = None
     for layer in model.layers:
         if 'mobilenet' in layer.name.lower() or 'efficientnet' in layer.name.lower():
@@ -306,13 +305,13 @@ def progressive_unfreeze_training(model, X_train, y_train, X_val, y_val, model_n
             break
     
     if backbone_layer:
-        # Dégeler les dernières couches
-        for layer in backbone_layer.layers[-30:]:
+        total_layers = len(backbone_layer.layers)
+        unfreeze_count = max(10, int(total_layers * 0.10))
+        for layer in backbone_layer.layers[-unfreeze_count:]:
             layer.trainable = True
         
-        print(f"🔓 Dégelé les 30 dernières couches du backbone")
+        print(f"🔓 Dégelé {unfreeze_count}/{total_layers} couches (~{100*unfreeze_count/total_layers:.0f}%)")
     
-    # Optimizer avec learning rate spécialisé pour Phase 2
     phase2_lr = config.PHASE_LEARNING_RATES["phase2"]
     optimizer2 = keras.optimizers.Adam(
         learning_rate=phase2_lr,
@@ -365,20 +364,18 @@ def progressive_unfreeze_training(model, X_train, y_train, X_val, y_val, model_n
     
     # ========== PHASE 3: Fine-tuning complet ==========
     print("\n" + "=" * 60)
-    print("📍 PHASE 3: Fine-tuning ultra-fin de tout le modèle")
+    print("📍 PHASE 3: Fine-tuning complet (100% trainable)")
     print("=" * 60)
     
-    # Dégeler tout le backbone avec learning rates différenciés
+    # Dégeler tout le backbone
     if backbone_layer:
         for layer in backbone_layer.layers:
             layer.trainable = True
-        print(f"🔓 Backbone complètement dégelé")
+        print(f"🔓 Backbone 100% dégelé")
     
-    # Learning rate ultra-fin spécialisé pour Phase 3
     phase3_lr = config.PHASE_LEARNING_RATES["phase3"]
-    optimizer3 = keras.optimizers.AdamW(
+    optimizer3 = keras.optimizers.Adam(
         learning_rate=phase3_lr,
-        weight_decay=0.0001,
         clipnorm=0.3 if use_gradient_clip else None
     )
     

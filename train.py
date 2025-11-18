@@ -90,29 +90,36 @@ def create_callbacks(model_name="pose_model", model_dir=None):
     return callbacks
 
 
-def create_data_augmentation():
+def create_data_generators(X_train, y_train, X_val, y_val):
     """
-    Crée un pipeline d'augmentation de données (optionnel)
+    Crée les générateurs de données avec augmentation avancée
+    
+    Args:
+        X_train, y_train: Données d'entraînement
+        X_val, y_val: Données de validation
     
     Returns:
-        augmentation: ImageDataGenerator pour l'augmentation
+        train_generator, val_generator: Générateurs pour train et validation
     """
-    if not config.USE_AUGMENTATION:
-        return None
-    
-    from tensorflow.keras.preprocessing.image import ImageDataGenerator
-    
-    datagen = ImageDataGenerator(
-        rotation_range=config.AUGMENTATION_CONFIG['rotation_range'],
-        width_shift_range=config.AUGMENTATION_CONFIG['width_shift_range'],
-        height_shift_range=config.AUGMENTATION_CONFIG['height_shift_range'],
-        zoom_range=config.AUGMENTATION_CONFIG['zoom_range'],
-        horizontal_flip=config.AUGMENTATION_CONFIG['horizontal_flip'],
-        fill_mode=config.AUGMENTATION_CONFIG['fill_mode']
-    )
-    
-    print("\n🔄 Augmentation de données activée")
-    return datagen
+    if config.USE_AUGMENTATION:
+        from advanced_data_generator import create_advanced_generators
+        
+        train_gen, val_gen = create_advanced_generators(
+            X_train, y_train, X_val, y_val,
+            batch_size=config.BATCH_SIZE,
+            use_augmentation=True
+        )
+        return train_gen, val_gen
+    else:
+        # Pas d'augmentation - créer des générateurs simples
+        from advanced_data_generator import create_advanced_generators
+        
+        train_gen, val_gen = create_advanced_generators(
+            X_train, y_train, X_val, y_val,
+            batch_size=config.BATCH_SIZE,
+            use_augmentation=False
+        )
+        return train_gen, val_gen
 
 
 def train_model(model, X_train, y_train, X_val, y_val, model_name="pose_model", model_dir=None):
@@ -143,40 +150,17 @@ def train_model(model, X_train, y_train, X_val, y_val, model_name="pose_model", 
         metrics=['mae']
     )
     
-    # Créer l'augmentation de données si activée
-    if config.USE_AUGMENTATION:
-        augmentation = create_data_augmentation()
-        if augmentation is not None:
-            # Entraîner avec augmentation
-            train_generator = augmentation.flow(X_train, y_train, batch_size=config.BATCH_SIZE)
-            history = model.fit(
-                train_generator,
-                validation_data=(X_val, y_val),
-                epochs=config.EPOCHS,
-                callbacks=callbacks,
-                verbose=config.VERBOSE,
-                steps_per_epoch=len(X_train) // config.BATCH_SIZE
-            )
-        else:
-            # Entraîner sans augmentation
-            history = model.fit(
-                X_train, y_train,
-                validation_data=(X_val, y_val),
-                batch_size=config.BATCH_SIZE,
-                epochs=config.EPOCHS,
-                callbacks=callbacks,
-                verbose=config.VERBOSE
-            )
-    else:
-        # Entraîner sans augmentation
-        history = model.fit(
-            X_train, y_train,
-            validation_data=(X_val, y_val),
-            batch_size=config.BATCH_SIZE,
-            epochs=config.EPOCHS,
-            callbacks=callbacks,
-            verbose=config.VERBOSE
-        )
+    # Créer les générateurs de données
+    train_generator, val_generator = create_data_generators(X_train, y_train, X_val, y_val)
+    
+    # Entraîner avec les générateurs
+    history = model.fit(
+        train_generator,
+        validation_data=val_generator,
+        epochs=config.EPOCHS,
+        callbacks=callbacks,
+        verbose=config.VERBOSE
+    )
     
     return history
 

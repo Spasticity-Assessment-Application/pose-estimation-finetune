@@ -4,7 +4,7 @@ Techniques avancées : Mixup, CutMix, Cosine Annealing, SWA, Label Smoothing, Mi
 """
 import os
 import config
-from train import create_callbacks, create_data_augmentation, evaluate_model, save_final_model, plot_training_history
+from train import create_callbacks, evaluate_model, save_final_model, plot_training_history, create_data_generators
 from tensorflow import keras
 from tensorflow.keras.callbacks import LearningRateScheduler, Callback
 import tensorflow as tf
@@ -264,30 +264,16 @@ def progressive_unfreeze_training(model, X_train, y_train, X_val, y_val, model_n
     curriculum_callback = CurriculumLearningCallback(max_epochs=phase1_epochs)
     callbacks_phase1 = callbacks_base + [warmup_callback, curriculum_callback]
     
-    # Entraînement avec augmentation (epochs augmentés grâce à la régularisation)
-    augmentation = create_data_augmentation()
-    if augmentation:
-        train_gen = augmentation.flow(X_train, y_train, batch_size=config.BATCH_SIZE)
-        steps_per_epoch = len(X_train) // config.BATCH_SIZE
-        print(f"📊 Phase 1 - Dataset: {len(X_train)} images, Batch size: {config.BATCH_SIZE}, Steps/epoch: {steps_per_epoch}")
-        history1 = model.fit(
-            train_gen,
-            validation_data=(X_val, y_val),
-            epochs=phase1_epochs,
-            callbacks=callbacks_phase1,
-            verbose=1,
-            steps_per_epoch=steps_per_epoch
-        )
-    else:
-        print(f"📊 Phase 1 - Dataset: {len(X_train)} images, Batch size: {config.BATCH_SIZE}, Steps/epoch: automatique")
-        history1 = model.fit(
-            X_train, y_train,
-            validation_data=(X_val, y_val),
-            batch_size=config.BATCH_SIZE,
-            epochs=phase1_epochs,
-            callbacks=callbacks_phase1,
-            verbose=1
-        )
+    # Entraînement avec augmentation avancée (epochs augmentés grâce à la régularisation)
+    train_gen, val_gen = create_data_generators(X_train, y_train, X_val, y_val)
+    print(f"📊 Phase 1 - Dataset: {len(X_train)} images, Batch size: {config.BATCH_SIZE}")
+    history1 = model.fit(
+        train_gen,
+        validation_data=val_gen,
+        epochs=phase1_epochs,
+        callbacks=callbacks_phase1,
+        verbose=1
+    )
     
     print("\n✅ Phase 1 terminée")
     metrics1 = evaluate_model(model, X_val, y_val)
@@ -333,31 +319,16 @@ def progressive_unfreeze_training(model, X_train, y_train, X_val, y_val, model_n
     if use_swa:
         callbacks_phase2 = callbacks_phase2 + [swa_callback]
     
-    # Phase 2 : utiliser augmentation standard (générateur Keras) au lieu du custom
-    print("⚠️  Utilisation de l'augmentation standard en Phase 2 (évite bugs tensors)")
-    augmentation = create_data_augmentation()
-    if augmentation:
-        train_gen = augmentation.flow(X_train, y_train, batch_size=config.BATCH_SIZE)
-        steps_per_epoch = len(X_train) // config.BATCH_SIZE
-        print(f"📊 Phase 2 - Dataset: {len(X_train)} images, Batch size: {config.BATCH_SIZE}, Steps/epoch: {steps_per_epoch}")
-        history2 = model.fit(
-            train_gen,
-            validation_data=(X_val, y_val),
-            epochs=phase2_epochs,
-            callbacks=callbacks_phase2,
-            verbose=1,
-            steps_per_epoch=steps_per_epoch
-        )
-    else:
-        print(f"📊 Phase 2 - Dataset: {len(X_train)} images, Batch size: {config.BATCH_SIZE}, Steps/epoch: automatique")
-        history2 = model.fit(
-            X_train, y_train,
-            validation_data=(X_val, y_val),
-            batch_size=config.BATCH_SIZE,
-            epochs=phase2_epochs,
-            callbacks=callbacks_phase2,
-            verbose=1
-        )
+    # Phase 2 : utiliser les générateurs avancés
+    train_gen, val_gen = create_data_generators(X_train, y_train, X_val, y_val)
+    print(f"📊 Phase 2 - Dataset: {len(X_train)} images, Batch size: {config.BATCH_SIZE}")
+    history2 = model.fit(
+        train_gen,
+        validation_data=val_gen,
+        epochs=phase2_epochs,
+        callbacks=callbacks_phase2,
+        verbose=1
+    )
     
     print("\n✅ Phase 2 terminée")
     metrics2 = evaluate_model(model, X_val, y_val)
@@ -394,12 +365,18 @@ def progressive_unfreeze_training(model, X_train, y_train, X_val, y_val, model_n
     if use_swa:
         callbacks_phase3 = callbacks_phase3 + [swa_callback]
     
-    # Phase 3 : entraînement simple sans augmentation avancée (plus stable)
+    # Phase 3 : générateurs sans augmentation pour stabilité
     print("⚠️  Augmentation désactivée en Phase 3 pour stabilité")
-    print(f"📊 Phase 3 - Dataset: {len(X_train)} images, Batch size: {config.BATCH_SIZE}, Steps/epoch: automatique")
+    from advanced_data_generator import create_advanced_generators
+    train_gen, val_gen = create_advanced_generators(
+        X_train, y_train, X_val, y_val,
+        batch_size=config.BATCH_SIZE,
+        use_augmentation=False
+    )
+    print(f"📊 Phase 3 - Dataset: {len(X_train)} images, Batch size: {config.BATCH_SIZE}")
     history3 = model.fit(
-        X_train, y_train,
-        validation_data=(X_val, y_val),
+        train_gen,
+        validation_data=val_gen,
         batch_size=config.BATCH_SIZE,
         epochs=phase3_epochs,
         callbacks=callbacks_phase3,

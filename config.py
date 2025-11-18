@@ -158,8 +158,10 @@ BACKBONE_REDUCTION_RATIOS = {
 TFLITE_QUANTIZATION = True
 TFLITE_MODEL_NAME = "pose_model_quantized.tflite"
 
-# Augmentation
+# Augmentation - Configuration avancée (inspirée DeepLabCut + état de l'art)
 USE_AUGMENTATION = True
+
+# Augmentations géométriques (DeepLabCut baseline)
 AUGMENTATION_CONFIG = {
     "rotation_range": 25,
     "width_shift_range": 0.2,
@@ -167,9 +169,79 @@ AUGMENTATION_CONFIG = {
     "zoom_range": [0.8, 1.2],
     "horizontal_flip": True,
     "brightness_range": [0.6, 1.4],
-    "channel_shift_range": 0.0,
     "shear_range": 0,
     "fill_mode": "reflect"
 }
+
+# Augmentations avancées pour améliorer la généralisation
+ADVANCED_AUGMENTATION = {
+    # Blur pour simuler flou caméra/mouvement
+    "gaussian_blur": {
+        "enabled": True,
+        "probability": 0.3,
+        "sigma_range": [0.5, 2.0]  # DeepLabCut: σ=1-3
+    },
+    
+    # Color jitter pour robustesse aux conditions d'éclairage
+    "color_jitter": {
+        "enabled": True,
+        "probability": 0.4,
+        "contrast_range": [0.7, 1.3],      # ±30% contrast
+        "saturation_range": [0.7, 1.3],    # ±30% saturation
+        "hue_delta": 0.1                    # Légère variation teinte
+    },
+    
+    # Random crop pour forcer robustesse spatiale
+    "random_crop": {
+        "enabled": True,
+        "probability": 0.3,
+        "scale_range": [0.8, 1.0],  # 80-100% de l'image originale
+        "aspect_ratio": [0.9, 1.1]  # Maintenir aspect ratio proche
+    },
+    
+    # Occlusion aléatoire (objets devant, mains, etc.)
+    "random_occlusion": {
+        "enabled": True,
+        "probability": 0.2,
+        "num_patches": [1, 3],       # 1-3 patches par image
+        "patch_size_range": [0.05, 0.15],  # 5-15% de l'image
+        "fill_value": 0              # Noir (peut être random)
+    },
+    
+    # Elastic deformation pour poses plus naturelles
+    "elastic_transform": {
+        "enabled": True,
+        "probability": 0.2,
+        "alpha_range": [5, 15],      # Intensité déformation
+        "sigma": 3                    # Lissage
+    },
+    
+    # Perspective transform pour angles caméra
+    "perspective_transform": {
+        "enabled": True,
+        "probability": 0.15,
+        "distortion_scale": 0.2       # Légère distortion
+    },
+    
+    # Gaussian noise pour robustesse au bruit capteur
+    "gaussian_noise": {
+        "enabled": True,
+        "probability": 0.2,
+        "mean": 0,
+        "std_range": [0.01, 0.05]     # 1-5% noise
+    },
+    
+    # Motion blur (flou directionnel)
+    "motion_blur": {
+        "enabled": True,
+        "probability": 0.15,
+        "kernel_size_range": [3, 7],
+        "angle_range": [0, 180]       # Toutes directions
+    }
+}
+
+# Probabilité d'appliquer les augmentations avancées
+# (les augmentations de base sont toujours appliquées)
+ADVANCED_AUGMENTATION_PROBABILITY = 0.7  # 70% des images
 
 VERBOSE = 1

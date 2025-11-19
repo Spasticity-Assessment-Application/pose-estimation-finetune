@@ -174,6 +174,13 @@ def build_pose_model(num_keypoints=3, backbone_name="MobileNetV2", input_shape=(
     # 3. Extraire les features du backbone
     x = backbone(inputs)
     
+    # 3.5. FIX pour MobileNetV3: Normaliser les valeurs négatives qui peuvent perturber l'apprentissage
+    if "MobileNetV3" in backbone_name:
+        # MobileNetV3 peut produire des valeurs négatives (due à BatchNorm)
+        # On ajoute une ReLU pour garantir des valeurs positives
+        x = layers.ReLU(name='backbone_normalize')(x)
+        print(f"⚡ Ajout d'une ReLU après {backbone_name} pour normaliser les valeurs")
+    
     # 4. Déterminer la forme de sortie du backbone pour adapter la tête
     # La plupart des backbones réduisent par un facteur de 32
     # Ex: 192/32=6x6, 224/32=7x7, 240/32=7.5≈8x8

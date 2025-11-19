@@ -29,11 +29,17 @@ def main(args):
             config.INPUT_SHAPE = (*recommended_size, 3)
             print(f"\n📦 Backbone: {args.backbone}")
             print(f"📊 Taille d'image adaptée: {recommended_size[0]}x{recommended_size[1]}")
+        # Adapter la taille des heatmaps selon le backbone
+        if args.backbone in config.BACKBONE_HEATMAP_SIZES:
+            recommended_heatmap = config.BACKBONE_HEATMAP_SIZES[args.backbone]
+            config.HEATMAP_SIZE = recommended_heatmap
+            print(f"📊 Taille heatmap adaptée: {recommended_heatmap[0]}x{recommended_heatmap[1]}")
     
     print(f"\n🎯 Configuration:")
     print(f"   - Backbone: {config.BACKBONE}")
     print(f"   - Input size: {config.INPUT_SHAPE[0]}x{config.INPUT_SHAPE[1]}")
     print(f"   - Heatmap size: {config.HEATMAP_SIZE[0]}x{config.HEATMAP_SIZE[1]}")
+    print(f"   - Ratio: {config.INPUT_SHAPE[0] / config.HEATMAP_SIZE[0]:.2f}x")
 
     # ÉTAPE 0: Configuration des dossiers
     print("\n📁 CONFIGURATION DES DOSSIERS")

@@ -134,6 +134,26 @@ BACKBONE_INPUT_SIZES = {
     "EfficientNetV2B3": (300, 300),
 }
 
+# Tailles de heatmaps recommandées par backbone (maintient ratio constant ~3x)
+BACKBONE_HEATMAP_SIZES = {
+    "MobileNetV2": (64, 64),          # 192/64 = 3.0
+    "MobileNetV3Small": (64, 64),     # 192/64 = 3.0
+    "MobileNetV3Large": (64, 64),     # 224/64 = 3.5 (légèrement plus dense)
+    "EfficientNetLite0": (64, 64),    # 224/64 = 3.5
+    "EfficientNetLite1": (64, 64),    # 240/64 = 3.75
+    "EfficientNetLite2": (64, 64),    # 260/64 = 4.06
+    "EfficientNetLite3": (64, 64),    # 280/64 = 4.37
+    "EfficientNetLite4": (64, 64),    # 300/64 = 4.69
+    "EfficientNetB0": (64, 64),       # 224/64 = 3.5
+    "EfficientNetB1": (64, 64),       # 240/64 = 3.75
+    "EfficientNetB2": (64, 64),       # 260/64 = 4.06
+    "EfficientNetB3": (64, 64),       # 300/64 = 4.69
+    "EfficientNetV2B0": (64, 64),     # 224/64 = 3.5
+    "EfficientNetV2B1": (64, 64),     # 240/64 = 3.75
+    "EfficientNetV2B2": (64, 64),     # 260/64 = 4.06
+    "EfficientNetV2B3": (64, 64),     # 300/64 = 4.69
+}
+
 # Ratios de réduction du backbone (pour adapter la tête de déconvolution)
 BACKBONE_REDUCTION_RATIOS = {
     "MobileNetV2": 32,          # 192/32 = 6x6

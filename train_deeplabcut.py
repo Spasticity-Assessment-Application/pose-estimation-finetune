@@ -20,7 +20,8 @@ from advanced_data_generator import create_advanced_generators
 def get_backbone_layer(model):
     """Trouve la couche du backbone dans le modèle"""
     for layer in model.layers:
-        if 'mobilenet' in layer.name.lower():
+        layer_name = layer.name.lower()
+        if 'mobilenet' in layer_name or 'efficientnet' in layer_name:
             return layer
     return None
 

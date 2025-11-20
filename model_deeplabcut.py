@@ -8,7 +8,7 @@ Architecture de modèle inspirée de DeepLabCut
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers, Model
-from tensorflow.keras.applications import MobileNetV2, MobileNetV3Small, MobileNetV3Large
+from tensorflow.keras.applications import MobileNetV2, MobileNetV3Small, MobileNetV3Large, EfficientNetB0
 import config
 
 
@@ -47,6 +47,12 @@ def get_backbone_deeplabcut(backbone_name="MobileNetV3Small", input_shape=(256, 
             alpha=1.0,
             minimalistic=True,
             include_preprocessing=False
+        )
+    elif backbone_name == "EfficientNetLite0":
+        backbone = EfficientNetB0(
+            input_shape=input_shape,
+            include_top=False,
+            weights=config.PRETRAINED_WEIGHTS
         )
     else:
         raise ValueError(f"Backbone {backbone_name} non supporté pour DeepLabCut mode")

@@ -108,7 +108,11 @@ class AdvancedAugmentation:
         hsv[:, :, 1] = np.clip(hsv[:, :, 1] * sat_factor, 0, 255)
         
         # Hue
-        hue_delta = np.random.uniform(-cfg["hue_delta"], cfg["hue_delta"]) * 179
+        hue_range = cfg.get("hue_range", cfg.get("hue_delta", 0.1))
+        if isinstance(hue_range, tuple):
+            hue_delta = np.random.uniform(*hue_range) * 179
+        else:
+            hue_delta = np.random.uniform(-hue_range, hue_range) * 179
         hsv[:, :, 0] = (hsv[:, :, 0] + hue_delta) % 180
         
         # Reconvertir en RGB
@@ -130,7 +134,8 @@ class AdvancedAugmentation:
         
         # Taille du crop
         scale = np.random.uniform(*cfg["scale_range"])
-        aspect_ratio = np.random.uniform(*cfg["aspect_ratio"])
+        ratio_range = cfg.get("ratio_range", cfg.get("aspect_ratio", (0.9, 1.1)))
+        aspect_ratio = np.random.uniform(*ratio_range)
         
         crop_h = int(h * scale)
         crop_w = int(crop_h * aspect_ratio)
@@ -183,8 +188,9 @@ class AdvancedAugmentation:
             top = np.random.randint(0, h - patch_h + 1)
             left = np.random.randint(0, w - patch_w + 1)
             
-            # Appliquer
-            image_occluded[top:top+patch_h, left:left+patch_w] = cfg["fill_value"]
+            # Appliquer occlusion (valeur de remplissage)
+            fill_value = cfg.get("fill_value", 0.5)  # Gris moyen par défaut
+            image_occluded[top:top+patch_h, left:left+patch_w] = fill_value
         
         return image_occluded
     
@@ -245,7 +251,9 @@ class AdvancedAugmentation:
         pts1 = np.float32([[0, 0], [w, 0], [0, h], [w, h]])
         
         # Points destination (légèrement déformés)
-        scale = cfg["distortion_scale"]
+        scale = cfg.get("scale_range", cfg.get("distortion_scale", 0.1))
+        if isinstance(scale, tuple):
+            scale = np.random.uniform(*scale)
         pts2 = pts1 + np.random.uniform(-scale * w, scale * w, pts1.shape).astype(np.float32)
         
         # Matrice de transformation
@@ -272,8 +280,10 @@ class AdvancedAugmentation:
         """Ajoute du bruit gaussien"""
         cfg = self.config["gaussian_noise"]
         
-        std = np.random.uniform(*cfg["std_range"])
-        noise = np.random.normal(cfg["mean"], std, image.shape)
+        sigma_range = cfg.get("sigma_range", cfg.get("std_range", (0.01, 0.05)))
+        std = np.random.uniform(*sigma_range)
+        mean = cfg.get("mean", 0)
+        noise = np.random.normal(mean, std, image.shape)
         
         image_noisy = image + noise
         return np.clip(image_noisy, 0, 1)
@@ -288,7 +298,8 @@ class AdvancedAugmentation:
             ksize += 1
         
         # Angle aléatoire
-        angle = np.random.uniform(*cfg["angle_range"])
+        angle_range = cfg.get("angle_range", (0, 360))
+        angle = np.random.uniform(*angle_range)
         
         # Créer le kernel de motion blur
         kernel = np.zeros((ksize, ksize))

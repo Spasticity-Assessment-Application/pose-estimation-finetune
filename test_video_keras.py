@@ -3,11 +3,31 @@ Test du modèle Keras (.h5) sur une vidéo
 """
 import cv2
 import numpy as np
+import json
 from tensorflow import keras
 import argparse
 import os
 from pathlib import Path
 import config
+
+
+def load_model_config(model_path):
+    """Charge la configuration du modèle depuis model_config.json"""
+    model_dir = Path(model_path).parent
+    config_file = model_dir / "model_config.json"
+    
+    if config_file.exists():
+        with open(config_file, 'r') as f:
+            model_config = json.load(f)
+        print(f"✅ Configuration chargée: {config_file}")
+        print(f"   - Backbone: {model_config.get('backbone', 'unknown')}")
+        print(f"   - Input size: {model_config.get('input_size', [192, 192])}")
+        print(f"   - Heatmap size: {model_config.get('heatmap_size', [64, 64])}")
+        return model_config
+    else:
+        print(f"⚠️  Configuration non trouvée: {config_file}")
+        print(f"💡 Utilisation des paramètres par défaut")
+        return None
 
 
 def load_keras_model(model_path):
@@ -79,16 +99,24 @@ def predict_frame(model, frame, input_size):
     return heatmaps
 
 
-def extract_keypoints_from_heatmaps(heatmaps, frame_shape):
+def extract_keypoints_from_heatmaps(heatmaps, frame_shape, expected_heatmap_size=None):
     """Extrait les coordonnées des keypoints depuis les heatmaps"""
     h, w = frame_shape[:2]
     keypoints = []
+    
+    # Utiliser la taille attendue si fournie, sinon utiliser la taille réelle
+    if expected_heatmap_size:
+        heatmap_h, heatmap_w = expected_heatmap_size
+    else:
+        heatmap_h, heatmap_w = heatmaps.shape[0], heatmaps.shape[1]
 
     for i in range(heatmaps.shape[-1]):
         heatmap = heatmaps[:, :, i]
         max_pos = np.unravel_index(heatmap.argmax(), heatmap.shape)
-        y = int(max_pos[0] * h / heatmap.shape[0])
-        x = int(max_pos[1] * w / heatmap.shape[1])
+        
+        # Convertir en coordonnées de l'image en utilisant la taille attendue
+        y = int(max_pos[0] * h / heatmap_h)
+        x = int(max_pos[1] * w / heatmap_w)
         confidence = heatmap[max_pos]
         keypoints.append({'x': x, 'y': y, 'confidence': confidence})
 
@@ -135,6 +163,13 @@ def process_video(video_path, model_path, output_path=None):
     print(f"💡 Utilisation du modèle: {model_path}")
     print(f"📹 Vidéo: {video_path}")
 
+    # Charger la configuration du modèle
+    model_config = load_model_config(model_path)
+    expected_heatmap_size = None
+    if model_config and 'heatmap_size' in model_config:
+        expected_heatmap_size = tuple(model_config['heatmap_size'])
+        print(f"🎯 Heatmap size attendu: {expected_heatmap_size}")
+
     # Charger le modèle
     model = load_keras_model(model_path)
     
@@ -180,8 +215,8 @@ def process_video(video_path, model_path, output_path=None):
         # Prédiction
         heatmaps = predict_frame(model, frame, input_size)
 
-        # Extraire keypoints
-        keypoints = extract_keypoints_from_heatmaps(heatmaps, (height, width))
+        # Extraire keypoints avec la taille attendue
+        keypoints = extract_keypoints_from_heatmaps(heatmaps, (height, width), expected_heatmap_size)
 
         # Dessiner keypoints
         annotated_frame = frame.copy()

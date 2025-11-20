@@ -167,7 +167,7 @@ def train_model(model, X_train, y_train, X_val, y_val, model_name="pose_model", 
 
 def save_final_model(model, model_name="pose_model", model_dir=None):
     """
-    Sauvegarde le modèle final
+    Sauvegarde le modèle final avec sa configuration
     
     Args:
         model: Modèle Keras entraîné
@@ -177,6 +177,8 @@ def save_final_model(model, model_name="pose_model", model_dir=None):
     Returns:
         tuple: (final_model_path, saved_model_dir)
     """
+    import json
+    
     # Déterminer le dossier des modèles
     models_dir = config.MODELS_DIR if model_dir is None else os.path.join(model_dir, "models")
     
@@ -189,6 +191,23 @@ def save_final_model(model, model_name="pose_model", model_dir=None):
     saved_model_dir = os.path.join(models_dir, f"{model_name}_saved_model")
     model.export(saved_model_dir)
     print(f"💾 SavedModel sauvegardé: {saved_model_dir}")
+    
+    # Sauvegarder la configuration du modèle (CRUCIAL pour l'inférence correcte)
+    model_config = {
+        'backbone': config.BACKBONE,
+        'input_size': [config.INPUT_SHAPE[0], config.INPUT_SHAPE[1]],
+        'heatmap_size': [config.HEATMAP_SIZE[0], config.HEATMAP_SIZE[1]],
+        'num_keypoints': config.NUM_KEYPOINTS,
+        'bodyparts': config.BODYPARTS
+    }
+    
+    config_path = os.path.join(models_dir, "model_config.json")
+    with open(config_path, 'w') as f:
+        json.dump(model_config, f, indent=2)
+    print(f"💾 Configuration sauvegardée: {config_path}")
+    print(f"   - Backbone: {model_config['backbone']}")
+    print(f"   - Input size: {model_config['input_size']}")
+    print(f"   - Heatmap size: {model_config['heatmap_size']}")
     
     return final_model_path, saved_model_dir
 

@@ -6,8 +6,28 @@ import numpy as np
 import tensorflow as tf
 import argparse
 import os
+import json
 from pathlib import Path
 import config
+
+
+def load_model_config(model_path):
+    """Charge la configuration du modèle depuis model_config.json"""
+    model_dir = Path(model_path).parent
+    config_file = model_dir / "model_config.json"
+    
+    if config_file.exists():
+        with open(config_file, 'r') as f:
+            model_config = json.load(f)
+        print(f"✅ Configuration chargée: {config_file}")
+        print(f"   - Backbone: {model_config.get('backbone', 'unknown')}")
+        print(f"   - Input size: {model_config.get('input_size', [192, 192])}")
+        print(f"   - Heatmap size: {model_config.get('heatmap_size', [64, 64])}")
+        return model_config
+    else:
+        print(f"⚠️  Configuration non trouvée: {config_file}")
+        print(f"💡 Utilisation des paramètres par défaut")
+        return None
 
 
 def load_tflite_model(model_path):
@@ -56,13 +76,20 @@ def predict_frame(interpreter, input_details, output_details, frame, input_size)
     return output_data[0]
 
 
-def extract_keypoints_from_heatmaps(heatmaps, frame_shape):
+def extract_keypoints_from_heatmaps(heatmaps, frame_shape, expected_heatmap_size=None):
     """Extrait les coordonnées des keypoints depuis les heatmaps"""
     h, w = frame_shape[:2]
     keypoints = []
     
+    # Utiliser la taille attendue si fournie, sinon utiliser la taille réelle
+    if expected_heatmap_size:
+        heatmap_h, heatmap_w = expected_heatmap_size
+    else:
+        heatmap_h, heatmap_w = heatmaps.shape[0], heatmaps.shape[1]
+    
     # Debug: afficher la forme et les valeurs des heatmaps
     print(f"🔍 Debug - Heatmaps shape: {heatmaps.shape}, min: {heatmaps.min():.4f}, max: {heatmaps.max():.4f}")
+    print(f"🔍 Using heatmap size for conversion: {heatmap_w}x{heatmap_h}")
     
     for i in range(heatmaps.shape[-1]):
         heatmap = heatmaps[:, :, i]
@@ -74,11 +101,11 @@ def extract_keypoints_from_heatmaps(heatmaps, frame_shape):
         
         print(f"  Max position dans heatmap: {max_pos}")
         
-        # Convertir en coordonnées de l'image
-        y = int(max_pos[0] * h / heatmap.shape[0])
-        x = int(max_pos[1] * w / heatmap.shape[1])
+        # Convertir en coordonnées de l'image en utilisant la taille attendue
+        y = int(max_pos[0] * h / heatmap_h)
+        x = int(max_pos[1] * w / heatmap_w)
         
-        print(f"  Coordonnées finales: x={x}, y={y} (frame: {w}x{h})")
+        print(f"  Coordonnées finales: x={x}, y={y} (frame: {w}x{h}, heatmap: {heatmap_w}x{heatmap_h})")
         
         # Confiance (valeur du pic)
         confidence = heatmap[max_pos]
@@ -129,6 +156,13 @@ def process_video(video_path, model_path, output_path=None, display=True):
     print(f"📹 Vidéo: {video_path}")
     print(f"🤖 Modèle: {model_path}")
     
+    # Charger la configuration du modèle
+    model_config = load_model_config(model_path)
+    expected_heatmap_size = None
+    if model_config and 'heatmap_size' in model_config:
+        expected_heatmap_size = tuple(model_config['heatmap_size'])
+        print(f"🎯 Heatmap size attendu: {expected_heatmap_size}")
+    
     # Charger le modèle
     print("\n🔄 Chargement du modèle...")
     interpreter, input_details, output_details = load_tflite_model(model_path)
@@ -177,8 +211,8 @@ def process_video(video_path, model_path, output_path=None, display=True):
             # Prédiction
             heatmaps = predict_frame(interpreter, input_details, output_details, frame, input_size)
             
-            # Extraire les keypoints
-            keypoints = extract_keypoints_from_heatmaps(heatmaps, frame.shape)
+            # Extraire les keypoints avec la taille attendue
+            keypoints = extract_keypoints_from_heatmaps(heatmaps, frame.shape, expected_heatmap_size)
             
             # Dessiner sur la frame
             frame_annotated = draw_keypoints(frame.copy(), keypoints)

@@ -265,3 +265,84 @@ ADVANCED_AUGMENTATION = {
 ADVANCED_AUGMENTATION_PROBABILITY = 0.7  # 70% des images
 
 VERBOSE = 1
+
+# ========== CONFIGURATION DEEPLABCUT-STYLE ==========
+# Architecture
+DEEPLABCUT_HEATMAP_STRIDE = 4  # stride 4 = haute résolution (64×64 pour 256×256 input)
+
+# Tailles d'images pour DeepLabCut (plus grandes pour meilleure précision)
+DEEPLABCUT_INPUT_SIZES = {
+    "MobileNetV2": (256, 256),
+    "MobileNetV3Small": (256, 256),
+    "MobileNetV3Large": (384, 384),
+}
+
+# Learning rates par phase (style DeepLabCut)
+DEEPLABCUT_LR = {
+    "warmup": 3e-3,      # Phase 1: LR élevé pour warmup de la tête
+    "unfreeze": 5e-4,    # Phase 2: LR moyen pour déblocage progressif
+    "finetune": 1e-4,    # Phase 3: LR bas pour fine-tuning
+    "finetune_min": 3e-5 # Phase 3: LR min après cosine decay
+}
+
+# Epochs par phase
+DEEPLABCUT_EPOCHS = {
+    "warmup": 20,    # Phase 1: Warmup court mais intense
+    "unfreeze": 30,  # Phase 2: Déblocage progressif
+    "finetune": 50   # Phase 3: Fine-tuning long
+}
+
+# Régularisation
+DEEPLABCUT_WEIGHT_DECAY = 1e-4  # Weight decay pour AdamW
+DEEPLABCUT_BATCH_SIZE = 4       # Petit batch size pour petit dataset
+
+# Augmentations lourdes (style DeepLabCut)
+# Plus agressives que le mode standard pour maximiser la généralisation
+ADVANCED_AUGMENTATION_DEEPLABCUT = {
+    "gaussian_blur": {
+        "enabled": True,
+        "probability": 0.3,
+        "sigma_range": (0.0, 2.0)
+    },
+    "color_jitter": {
+        "enabled": True,
+        "probability": 0.5,
+        "brightness_range": (0.75, 1.25),  # ±25%
+        "contrast_range": (0.75, 1.25),    # ±25%
+        "saturation_range": (0.8, 1.2),
+        "hue_range": (-0.05, 0.05)
+    },
+    "random_crop": {
+        "enabled": True,
+        "probability": 0.4,
+        "scale_range": (0.75, 1.0),  # Crop jusqu'à 75% de l'image
+        "ratio_range": (0.9, 1.1)
+    },
+    "random_occlusion": {
+        "enabled": True,
+        "probability": 0.2,
+        "num_patches": (1, 3),
+        "patch_size_range": (0.05, 0.20)  # 5-20% de l'image
+    },
+    "elastic_transform": {
+        "enabled": True,
+        "probability": 0.2,
+        "alpha_range": (30, 40),
+        "sigma": 5
+    },
+    "perspective_transform": {
+        "enabled": True,
+        "probability": 0.2,
+        "scale_range": (0.05, 0.15)
+    },
+    "gaussian_noise": {
+        "enabled": True,
+        "probability": 0.2,
+        "sigma_range": (0.01, 0.03)
+    },
+    "motion_blur": {
+        "enabled": True,
+        "probability": 0.15,
+        "kernel_size_range": (3, 7)
+    }
+}

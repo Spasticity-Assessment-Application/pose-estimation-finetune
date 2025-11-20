@@ -14,6 +14,18 @@ from tqdm import tqdm
 import config
 
 
+def load_model_config(model_path):
+    """Charge la configuration du modèle depuis model_config.json"""
+    import json
+    model_dir = Path(model_path).parent
+    config_file = model_dir / "model_config.json"
+    
+    if config_file.exists():
+        with open(config_file, 'r') as f:
+            return json.load(f)
+    return None
+
+
 def load_keras_model(model_path):
     """Charge un modèle Keras"""
     print(f"📦 Chargement modèle Keras: {model_path}")
@@ -73,18 +85,24 @@ def predict_tflite(interpreter, input_details, output_details, frame, input_size
     return output_data[0]
 
 
-def extract_keypoints_from_heatmaps(heatmaps, frame_shape):
+def extract_keypoints_from_heatmaps(heatmaps, frame_shape, expected_heatmap_size=None):
     """Extrait les coordonnées des keypoints depuis les heatmaps"""
     h, w = frame_shape[:2]
     keypoints = []
+    
+    # Utiliser la taille attendue si fournie
+    if expected_heatmap_size:
+        heatmap_h, heatmap_w = expected_heatmap_size
+    else:
+        heatmap_h, heatmap_w = heatmaps.shape[0], heatmaps.shape[1]
     
     for i in range(heatmaps.shape[-1]):
         heatmap = heatmaps[:, :, i]
         max_pos = np.unravel_index(heatmap.argmax(), heatmap.shape)
         
-        # Coordonnées dans l'image originale
-        y = int(max_pos[0] * h / heatmap.shape[0])
-        x = int(max_pos[1] * w / heatmap.shape[1])
+        # Coordonnées dans l'image originale en utilisant la taille attendue
+        y = int(max_pos[0] * h / heatmap_h)
+        x = int(max_pos[1] * w / heatmap_w)
         confidence = float(heatmap[max_pos])
         
         keypoints.append({'x': x, 'y': y, 'confidence': confidence})
@@ -95,6 +113,12 @@ def extract_keypoints_from_heatmaps(heatmaps, frame_shape):
 def analyze_video_with_model(video_path, model_info, model_type):
     """Analyse une vidéo avec un modèle donné"""
     results = []
+    
+    # Charger la configuration du modèle
+    model_config = load_model_config(model_info)
+    expected_heatmap_size = None
+    if model_config and 'heatmap_size' in model_config:
+        expected_heatmap_size = tuple(model_config['heatmap_size'])
     
     # Charger le modèle selon le type
     if model_type == 'keras':
@@ -124,8 +148,8 @@ def analyze_video_with_model(video_path, model_info, model_type):
         else:
             heatmaps = predict_tflite(interpreter, input_details, output_details, frame, input_size)
         
-        # Extraire les keypoints
-        keypoints = extract_keypoints_from_heatmaps(heatmaps, frame.shape)
+        # Extraire les keypoints avec la taille attendue
+        keypoints = extract_keypoints_from_heatmaps(heatmaps, frame.shape, expected_heatmap_size)
         
         # Enregistrer les résultats
         for kp_idx, kp in enumerate(keypoints):

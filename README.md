@@ -6,6 +6,20 @@ Modèle de pose estimation fine-tuné avec support multi-backbones pour détecte
 
 ## Installation
 
+### Google Colab
+
+```bash
+# Cloner la branche avec l'entraînement avancé
+!git clone -b tests-upgrade-fine-tunning https://github.com/Spasticity-Assessment-Application/pose-estimation-finetune.git
+%cd pose-estimation-finetune
+
+# Installer les dépendances
+!pip install -q tensorflow==2.15.0 opencv-python pandas tqdm scikit-learn
+
+# Uploader vos données labeled-data/ puis lancer l'entraînement
+!python main.py --save-data --advanced-training
+```
+
 ### Avec Conda (recommandé)
 
 ```bash

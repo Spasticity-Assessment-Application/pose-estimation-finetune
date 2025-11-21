@@ -276,6 +276,10 @@ DEEPLABCUT_INPUT_SIZES = {
     "MobileNetV3Small": (256, 256),
     "MobileNetV3Large": (384, 384),
     "EfficientNetLite0": (224, 224),
+    "EfficientNetLite1": (240, 240),
+    "EfficientNetLite2": (260, 260),
+    "EfficientNetLite3": (280, 280),
+    "EfficientNetLite4": (300, 300),
 }
 
 # Learning rates par phase (style DeepLabCut)

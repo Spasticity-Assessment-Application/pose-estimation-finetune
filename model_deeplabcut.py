@@ -8,7 +8,10 @@ Architecture de modèle inspirée de DeepLabCut
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers, Model
-from tensorflow.keras.applications import MobileNetV2, MobileNetV3Small, MobileNetV3Large, EfficientNetB0
+from tensorflow.keras.applications import (
+    MobileNetV2, MobileNetV3Small, MobileNetV3Large,
+    EfficientNetB0, EfficientNetB1, EfficientNetB2, EfficientNetB3, EfficientNetB4
+)
 import config
 
 
@@ -50,6 +53,30 @@ def get_backbone_deeplabcut(backbone_name="MobileNetV3Small", input_shape=(256, 
         )
     elif backbone_name == "EfficientNetLite0":
         backbone = EfficientNetB0(
+            input_shape=input_shape,
+            include_top=False,
+            weights=config.PRETRAINED_WEIGHTS
+        )
+    elif backbone_name == "EfficientNetLite1":
+        backbone = EfficientNetB1(
+            input_shape=input_shape,
+            include_top=False,
+            weights=config.PRETRAINED_WEIGHTS
+        )
+    elif backbone_name == "EfficientNetLite2":
+        backbone = EfficientNetB2(
+            input_shape=input_shape,
+            include_top=False,
+            weights=config.PRETRAINED_WEIGHTS
+        )
+    elif backbone_name == "EfficientNetLite3":
+        backbone = EfficientNetB3(
+            input_shape=input_shape,
+            include_top=False,
+            weights=config.PRETRAINED_WEIGHTS
+        )
+    elif backbone_name == "EfficientNetLite4":
+        backbone = EfficientNetB4(
             input_shape=input_shape,
             include_top=False,
             weights=config.PRETRAINED_WEIGHTS

@@ -174,7 +174,9 @@ def parse_arguments():
     
     # Configuration
     parser.add_argument('--backbone', type=str, default='MobileNetV3Small',
-                       choices=['MobileNetV2', 'MobileNetV3Small', 'MobileNetV3Large', "EfficientNetLite0"],
+                       choices=['MobileNetV2', 'MobileNetV3Small', 'MobileNetV3Large',
+                               'EfficientNetLite0', 'EfficientNetLite1', 'EfficientNetLite2',
+                               'EfficientNetLite3', 'EfficientNetLite4'],
                        help="Backbone à utiliser")
     
     # Options

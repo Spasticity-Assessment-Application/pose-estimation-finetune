@@ -88,95 +88,12 @@ NORMALIZE = True
 # Entraînement
 TRAIN_SPLIT = 0.8
 BATCH_SIZE = 8
-EPOCHS = 100
-LEARNING_RATE = 5e-5
-OPTIMIZER = "adam"
-EARLY_STOPPING_PATIENCE = 10
-REDUCE_LR_PATIENCE = 5
-REDUCE_LR_FACTOR = 0.5
 RANDOM_SEED = 42
 
-# Learning rates spécialisés par phase pour petit dataset
-PHASE_LEARNING_RATES = {
-    "phase1": 1e-4,
-    "phase2": 5e-5,
-    "phase3": 1e-5
-}
-
-PHASE_EPOCHS = {
-    "phase1": 50,
-    "phase2": 40,
-    "phase3": 40
-}
 
 # Modèle
-BACKBONE = "MobileNetV2"  # Par défaut: MobileNetV2 (rapide, léger, performant)
+BACKBONE = "MobileNetV2"  # Par défaut: MobileNetV3Small pour DeepLabCut
 PRETRAINED_WEIGHTS = "imagenet"
-ALPHA = 1.0
-
-# Tailles d'images recommandées par backbone (pour performances optimales)
-BACKBONE_INPUT_SIZES = {
-    "MobileNetV2": (192, 192),
-    "MobileNetV3Small": (192, 192),
-    "MobileNetV3Large": (224, 224),
-    "EfficientNetLite0": (224, 224),
-    "EfficientNetLite1": (240, 240),
-    "EfficientNetLite2": (260, 260),
-    "EfficientNetLite3": (280, 280),
-    "EfficientNetLite4": (300, 300),
-    "EfficientNetB0": (224, 224),
-    "EfficientNetB1": (240, 240),
-    "EfficientNetB2": (260, 260),
-    "EfficientNetB3": (300, 300),
-    "EfficientNetV2B0": (224, 224),
-    "EfficientNetV2B1": (240, 240),
-    "EfficientNetV2B2": (260, 260),
-    "EfficientNetV2B3": (300, 300),
-}
-
-# Tailles de heatmaps recommandées par backbone (maintient ratio constant ~3x)
-BACKBONE_HEATMAP_SIZES = {
-    "MobileNetV2": (64, 64),          # 192/64 = 3.0 ✅
-    "MobileNetV3Small": (64, 64),     # 192/64 = 3.0 ✅
-    "MobileNetV3Large": (74, 74),     # 224/74 = 3.03 ✅
-    "EfficientNetLite0": (74, 74),    # 224/74 = 3.03 ✅
-    "EfficientNetLite1": (80, 80),    # 240/80 = 3.0 ✅
-    "EfficientNetLite2": (86, 86),    # 260/86 = 3.02 ✅
-    "EfficientNetLite3": (93, 93),    # 280/93 = 3.01 ✅
-    "EfficientNetLite4": (100, 100),  # 300/100 = 3.0 ✅
-    "EfficientNetB0": (74, 74),       # 224/74 = 3.03 ✅
-    "EfficientNetB1": (80, 80),       # 240/80 = 3.0 ✅
-    "EfficientNetB2": (86, 86),       # 260/86 = 3.02 ✅
-    "EfficientNetB3": (100, 100),     # 300/100 = 3.0 ✅
-    "EfficientNetV2B0": (74, 74),     # 224/74 = 3.03 ✅
-    "EfficientNetV2B1": (80, 80),     # 240/80 = 3.0 ✅
-    "EfficientNetV2B2": (86, 86),     # 260/86 = 3.02 ✅
-    "EfficientNetV2B3": (100, 100),   # 300/100 = 3.0 ✅
-}
-
-# Ratios de réduction du backbone (pour adapter la tête de déconvolution)
-BACKBONE_REDUCTION_RATIOS = {
-    "MobileNetV2": 32,          # 192/32 = 6x6
-    "MobileNetV3Small": 32,
-    "MobileNetV3Large": 32,
-    "EfficientNetLite0": 32,    # 224/32 = 7x7
-    "EfficientNetLite1": 32,
-    "EfficientNetLite2": 32,
-    "EfficientNetLite3": 32,
-    "EfficientNetLite4": 32,
-    "EfficientNetB0": 32,
-    "EfficientNetB1": 32,
-    "EfficientNetB2": 32,
-    "EfficientNetB3": 32,
-    "EfficientNetV2B0": 32,
-    "EfficientNetV2B1": 32,
-    "EfficientNetV2B2": 32,
-    "EfficientNetV2B3": 32,
-}
-
-# Export TFLite
-TFLITE_QUANTIZATION = True
-TFLITE_MODEL_NAME = "pose_model_quantized.tflite"
 
 # Augmentation - Configuration avancée (inspirée DeepLabCut + état de l'art)
 USE_AUGMENTATION = True
@@ -264,8 +181,6 @@ ADVANCED_AUGMENTATION = {
 # (les augmentations de base sont toujours appliquées)
 ADVANCED_AUGMENTATION_PROBABILITY = 0.7  # 70% des images
 
-VERBOSE = 1
-
 # ========== CONFIGURATION DEEPLABCUT-STYLE ==========
 # Architecture
 DEEPLABCUT_HEATMAP_STRIDE = 4  # stride 4 = haute résolution (64×64 pour 256×256 input)
@@ -302,7 +217,7 @@ DEEPLABCUT_WEIGHT_DECAY = 1e-4  # Weight decay pour AdamW
 DEEPLABCUT_BATCH_SIZE = 4       # Petit batch size pour petit dataset
 
 # Augmentations lourdes (style DeepLabCut)
-# Plus agressives que le mode standard pour maximiser la généralisation
+# Maximiser la généralisation
 ADVANCED_AUGMENTATION_DEEPLABCUT = {
     "gaussian_blur": {
         "enabled": True,

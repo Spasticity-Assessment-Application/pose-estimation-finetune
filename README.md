@@ -17,7 +17,7 @@ Modèle de pose estimation fine-tuné avec support multi-backbones pour détecte
 !pip install -q tensorflow==2.15.0 opencv-python pandas tqdm scikit-learn
 
 # Uploader vos données labeled-data/ puis lancer l'entraînement
-!python main.py --save-data --advanced-training
+!python main.py --save-data
 ```
 
 ### Avec Conda (recommandé)
@@ -41,20 +41,14 @@ pip install -r requirements.txt
 ### Pipeline complet (entraînement + export)
 
 ```bash
-# Avec MobileNetV2 (défaut - rapide et léger)
-python main.py --save-data
+# Avec MobileNetV3Small (recommandé pour DeepLabCut-style)
+python main.py --save-data --backbone MobileNetV3Small
 
-# 🚀 Avec entraînement ULTRA-OPTIMISÉ (RECOMMANDÉ - 70 epochs, Mixup, CutMix, SWA, Mixed Precision)
-python main.py --save-data --advanced-training
-
-# Avec EfficientNetLite (meilleure précision, optimisé mobile)
+# Avec EfficientNetLite0 (meilleure précision)
 python main.py --save-data --backbone EfficientNetLite0
 
 # Avec EfficientNetV2 (haute précision)
 python main.py --save-data --backbone EfficientNetV2B0
-
-# Combinaison backbone + entraînement avancé
-python main.py --save-data --backbone EfficientNetLite0 --advanced-training
 ```
 
 ### Utiliser un modèle déjà entraîné
@@ -113,15 +107,75 @@ python export_video_analysis.py --video "votre_video.mp4" --model-dir "output/MN
 # Compare: Keras, TFLite float32, dynamic, int8
 ```
 
-# Génère: _\_keras_annotated.mp4 et _\_dynamic_annotated.mp4
+### Évaluation sur données de test annotées
 
-````
+```bash
+# Évaluer le modèle sur des données de test annotées
+python evaluate_test_labeled_data.py \
+    --model-dir output/DLC_MNv3S_20251120_195929 \
+    --test-data-dir test-labeled-data
+```
+
+## Évaluation du Modèle
+
+Ce script permet d'évaluer un modèle de pose estimation sur des données de test annotées dans le dossier `test-labeled-data`.
+
+### Structure des Données de Test
+
+Le dossier `test-labeled-data` doit contenir des sous-dossiers, chacun représentant une vidéo annotée :
+
+```
+test-labeled-data/
+├── video1_folder/
+│   ├── CollectedData_scoring.csv  # Annotations CSV
+│   ├── CollectedData_scoring.h5   # Annotations HDF5 (optionnel)
+│   ├── img001.png                 # Images annotées
+│   ├── img002.png
+│   └── ...
+└── video2_folder/
+    └── ...
+```
+
+### Format du CSV d'Annotations
+
+Le fichier CSV doit suivre le format DeepLabCut :
+
+```csv
+scorer,,,bodypart1,bodypart1,bodypart2,bodypart2,...
+bodyparts,,,x,y,x,y,...
+labeled-data,folder_name,image_name,x1,y1,x2,y2,...
+```
+
+### Métriques Calculées
+
+- **PCK (Percentage of Correct Keypoints)** : Pourcentage de keypoints correctement localisés (seuil 5% de la taille d'image)
+- **MSE** : Erreur quadratique moyenne en unités normalisées (0-1)
+- **Confiance** : Confiance moyenne des prédictions du modèle
+
+### Exemple de Sortie
+
+```
+📁 Évaluation du dossier: video1_folder
+📊 20 images annotées trouvées
+Évaluation video1_folder: 100%|████████████████████████████| 20/20 [00:02<00:00,  8.49it/s]
+   - PCK: 0.567 ± 0.238
+   - MSE: 0.0403 ± 0.0293 (normalisé)
+   - Confiance moyenne: 0.44 ± 0.18
+
+================================================================================
+📊 RÉSULTATS GLOBAUX
+================================================================================
+📈 Nombre total d'images évaluées: 20
+🎯 PCK moyen global: 0.567
+📏 MSE moyen global: 0.0403 (normalisé)
+🔍 Confiance moyenne globale: 0.44
+```
 
 ### Prédiction sur une image
 
 ```bash
 python predict.py --image "votre_image.jpg" --model "output/models/pose_model_best.h5"
-````
+```
 
 ## Options principales
 

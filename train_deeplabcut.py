@@ -373,6 +373,96 @@ def train_deeplabcut_progressive(model, X_train, y_train, X_val, y_val,
     return history_combined, final_metrics
 
 
+def save_final_model(model, model_name="pose_model", model_dir=None):
+    """
+    Sauvegarde le modèle final avec sa configuration
+    
+    Args:
+        model: Modèle Keras entraîné
+        model_name: Nom du modèle
+        model_dir: Dossier racine du modèle
+    
+    Returns:
+        tuple: (final_model_path, saved_model_dir)
+    """
+    import json
+    
+    # Déterminer le dossier des modèles
+    models_dir = config.MODELS_DIR if model_dir is None else os.path.join(model_dir, "models")
+    
+    # Sauvegarder le modèle complet (architecture + poids)
+    final_model_path = os.path.join(models_dir, f"{model_name}_final.h5")
+    model.save(final_model_path)
+    print(f"\n💾 Modèle final sauvegardé: {final_model_path}")
+    
+    # Sauvegarder aussi au format SavedModel (pour TFLite)
+    saved_model_dir = os.path.join(models_dir, f"{model_name}_saved_model")
+    model.export(saved_model_dir)
+    print(f"💾 SavedModel sauvegardé: {saved_model_dir}")
+    
+    # Sauvegarder la configuration du modèle (CRUCIAL pour l'inférence correcte)
+    model_config = {
+        'backbone': config.BACKBONE,
+        'input_size': [config.INPUT_SHAPE[0], config.INPUT_SHAPE[1]],
+        'heatmap_size': [config.HEATMAP_SIZE[0], config.HEATMAP_SIZE[1]],
+        'num_keypoints': config.NUM_KEYPOINTS,
+        'bodyparts': config.BODYPARTS
+    }
+    
+    config_path = os.path.join(models_dir, "model_config.json")
+    with open(config_path, 'w') as f:
+        json.dump(model_config, f, indent=2)
+    print(f"💾 Configuration sauvegardée: {config_path}")
+    print(f"   - Backbone: {model_config['backbone']}")
+    print(f"   - Input size: {model_config['input_size']}")
+    print(f"   - Heatmap size: {model_config['heatmap_size']}")
+    
+    return final_model_path, saved_model_dir
+
+
+def plot_training_history(history, save_path=None):
+    """
+    Trace les courbes d'apprentissage
+    
+    Args:
+        history: Historique de l'entraînement
+        save_path: Chemin pour sauvegarder la figure (optionnel)
+    """
+    try:
+        import matplotlib.pyplot as plt
+        
+        fig, axes = plt.subplots(1, 2, figsize=(15, 5))
+        
+        # Loss
+        axes[0].plot(history['loss'], label='Train Loss')
+        axes[0].plot(history['val_loss'], label='Val Loss')
+        axes[0].set_xlabel('Epoch')
+        axes[0].set_ylabel('Loss (MSE)')
+        axes[0].set_title('Courbe de Loss')
+        axes[0].legend()
+        axes[0].grid(True)
+        
+        # MAE
+        axes[1].plot(history['mae'], label='Train MAE')
+        axes[1].plot(history['val_mae'], label='Val MAE')
+        axes[1].set_xlabel('Epoch')
+        axes[1].set_ylabel('MAE')
+        axes[1].set_title('Courbe de MAE')
+        axes[1].legend()
+        axes[1].grid(True)
+        
+        plt.tight_layout()
+        
+        if save_path:
+            plt.savefig(save_path, dpi=150, bbox_inches='tight')
+            print(f"\n📊 Courbes d'apprentissage sauvegardées: {save_path}")
+        
+        plt.show()
+        
+    except ImportError:
+        print("\n⚠️  Matplotlib non installé, impossible de tracer les courbes")
+
+
 if __name__ == "__main__":
     print("✅ Module train_deeplabcut.py chargé")
     print("📝 Utilisez train_deeplabcut_progressive() pour l'entraînement")

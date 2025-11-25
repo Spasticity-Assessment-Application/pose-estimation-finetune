@@ -10,7 +10,7 @@ import config
 from data_preprocessing import prepare_data
 from model_deeplabcut import create_deeplabcut_model
 from train_deeplabcut import train_deeplabcut_progressive
-from train import save_final_model, plot_training_history
+from train_deeplabcut import save_final_model, plot_training_history
 from export_tflite import export_model
 
 
@@ -40,7 +40,7 @@ def main(args):
             print(f"📊 Heatmap size: {heatmap_h}×{heatmap_w} (stride {config.DEEPLABCUT_HEATMAP_STRIDE})")
     
     # Utiliser les augmentations DeepLabCut
-    config.ADVANCED_AUGMENTATION = config.ADVANCED_AUGMENTATION_DEEPLABCUT
+    # config.ADVANCED_AUGMENTATION = config.ADVANCED_AUGMENTATION
     config.BATCH_SIZE = config.DEEPLABCUT_BATCH_SIZE
     
     print(f"\n🎯 Configuration DeepLabCut:")

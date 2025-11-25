@@ -1,5 +1,6 @@
 """
-Script principal pour le pipeline de fine-tuning
+Script principal pour le pipeline DeepLabCut-Style
+Usage: python main.py --backbone MobileNetV3Small --save-data
 """
 import os
 import argparse
@@ -7,39 +8,41 @@ import numpy as np
 from datetime import datetime
 import config
 from data_preprocessing import prepare_data
-from model import create_model
-from train import train_model, save_final_model, evaluate_model, plot_training_history
+from model_deeplabcut import create_deeplabcut_model
+from train_deeplabcut import train_deeplabcut_progressive
+from train_deeplabcut import save_final_model, plot_training_history
 from export_tflite import export_model, test_tflite_model
-import advanced_training
 
 
 def main(args):
-    """Pipeline complet de fine-tuning"""
-    print("\n" + "=" * 60)
-    print("🎯 PIPELINE DE FINE-TUNING - POSE ESTIMATION")
-    print("=" * 60)
+    """Pipeline complet DeepLabCut-Style"""
+    print("\n" + "=" * 80)
+    print("🔬 PIPELINE DEEPLABCUT-STYLE - POSE ESTIMATION")
+    print("=" * 80)
 
-    # Configurer le backbone si spécifié en argument
-    if args.backbone:
-        config.BACKBONE = args.backbone
-        # Adapter la taille d'image selon le backbone
-        if args.backbone in config.BACKBONE_INPUT_SIZES:
-            recommended_size = config.BACKBONE_INPUT_SIZES[args.backbone]
-            config.IMAGE_SIZE = recommended_size
-            config.INPUT_SHAPE = (*recommended_size, 3)
-            print(f"\n📦 Backbone: {args.backbone}")
-            print(f"📊 Taille d'image adaptée: {recommended_size[0]}x{recommended_size[1]}")
-        # Adapter la taille des heatmaps selon le backbone
-        if args.backbone in config.BACKBONE_HEATMAP_SIZES:
-            recommended_heatmap = config.BACKBONE_HEATMAP_SIZES[args.backbone]
-            config.HEATMAP_SIZE = recommended_heatmap
-            print(f"📊 Taille heatmap adaptée: {recommended_heatmap[0]}x{recommended_heatmap[1]}")
+    # Configurer le backbone (utilise la valeur par défaut de config.BACKBONE)
+    config.BACKBONE = args.backbone
     
-    print(f"\n🎯 Configuration:")
-    print(f"   - Backbone: {config.BACKBONE}")
-    print(f"   - Input size: {config.INPUT_SHAPE[0]}x{config.INPUT_SHAPE[1]}")
-    print(f"   - Heatmap size: {config.HEATMAP_SIZE[0]}x{config.HEATMAP_SIZE[1]}")
-    print(f"   - Ratio: {config.INPUT_SHAPE[0] / config.HEATMAP_SIZE[0]:.2f}x")
+    # Utiliser toujours les tailles DeepLabCut
+    if args.backbone in config.DEEPLABCUT_INPUT_SIZES:
+        recommended_size = config.DEEPLABCUT_INPUT_SIZES[args.backbone]
+        config.IMAGE_SIZE = recommended_size
+        config.INPUT_SHAPE = (*recommended_size, 3)
+        
+        # Calculer heatmap size avec le stride
+        heatmap_h = recommended_size[0] // config.DEEPLABCUT_HEATMAP_STRIDE
+        heatmap_w = recommended_size[1] // config.DEEPLABCUT_HEATMAP_STRIDE
+        config.HEATMAP_SIZE = (heatmap_h, heatmap_w)
+        
+        print(f"\n📦 Backbone: {args.backbone}")
+        print(f"📊 Input size: {recommended_size[0]}×{recommended_size[1]}")
+        print(f"📊 Heatmap size: {heatmap_h}×{heatmap_w} (stride {config.DEEPLABCUT_HEATMAP_STRIDE})")
+    else:
+        # Fallback pour backbones non DeepLabCut
+        print(f"\n⚠️  Backbone {args.backbone} non supporté en mode DeepLabCut, utilisation des paramètres par défaut")
+        print(f"📦 Backbone: {args.backbone}")
+        print(f"📊 Input size: {config.IMAGE_SIZE[0]}×{config.IMAGE_SIZE[1]}")
+        print(f"📊 Heatmap size: {config.HEATMAP_SIZE[0]}×{config.HEATMAP_SIZE[1]}")
 
     # ÉTAPE 0: Configuration des dossiers
     print("\n📁 CONFIGURATION DES DOSSIERS")
@@ -76,33 +79,23 @@ def main(args):
     # ÉTAPE 2: Construction du modèle
     if not args.skip_training:
         print("\nÉTAPE 2/4 - CONSTRUCTION DU MODÈLE")
-        model = create_model()
+        model = create_deeplabcut_model()
 
         # ÉTAPE 3: Entraînement
-        print("\nÉTAPE 3/4 - ENTRAÎNEMENT")
-        model_name = "pose_model"  # Nom simplifié car le dossier contient déjà la date/backbone
+        print("\nÉTAPE 3/4 - ENTRAÎNEMENT DEEPLABCUT-STYLE")
+        model_name = "pose_model_dlc"  # Nom pour DeepLabCut
 
-        if args.advanced_training:
-            print("\n🚀 MODE ENTRAÎNEMENT AVANCÉ ACTIVÉ")
-            print("=" * 60)
-            history, metrics = advanced_training.progressive_unfreeze_training(
-                model=model,
-                X_train=X_train,
-                y_train=y_train,
-                X_val=X_val,
-                y_val=y_val,
-                model_name=model_name,
-                model_dir=model_dir,
-                use_advanced_aug=True,
-                use_swa=True,
-                use_mixed_precision=False,  # Désactivé pour éviter blocages
-                use_gradient_clip=True
-            )
-            final_model_path, saved_model_dir = save_final_model(model, model_name, model_dir)
-        else:
-            history = train_model(model=model, X_train=X_train, y_train=y_train, X_val=X_val, y_val=y_val, model_name=model_name, model_dir=model_dir)
-            final_model_path, saved_model_dir = save_final_model(model, model_name, model_dir)
-            metrics = evaluate_model(model, X_val, y_val)
+        history, metrics = train_deeplabcut_progressive(
+            model=model,
+            X_train=X_train,
+            y_train=y_train,
+            X_val=X_val,
+            y_val=y_val,
+            model_name=model_name,
+            model_dir=model_dir
+        )
+        
+        final_model_path, saved_model_dir = save_final_model(model, model_name, model_dir)
 
         if args.plot_history:
             plot_path = os.path.join(logs_dir, f"{model_name}_history.png")
@@ -127,15 +120,15 @@ def main(args):
             test_tflite_model(tflite_paths['dynamic'], X_val, y_val, num_samples=10)
     
     # Résumé final
-    print("\n" + "=" * 60)
-    print("🎉 PIPELINE TERMINÉ AVEC SUCCÈS!")
-    print("=" * 60)
+    print("\n" + "=" * 80)
+    print("🎉 PIPELINE DEEPLABCUT TERMINÉ AVEC SUCCÈS!")
+    print("=" * 80)
     print(f"\n📂 Résultats sauvegardés dans: {model_dir}")
     print(f"   - Modèles: {models_dir}")
     print(f"   - Logs: {logs_dir}")
     print(f"   - Vidéos: {videos_dir}")
 
-    print("\n" + "=" * 60)
+    print("\n" + "=" * 80)
 
 
 def parse_arguments():
@@ -143,7 +136,7 @@ def parse_arguments():
     Parse les arguments de la ligne de commande
     """
     parser = argparse.ArgumentParser(
-        description="Pipeline de fine-tuning pour la pose estimation"
+        description="Pipeline DeepLabCut-Style pour la pose estimation"
     )
     
     # Options de workflow
@@ -167,15 +160,13 @@ def parse_arguments():
     parser.add_argument(
         '--backbone',
         type=str,
-        default=None,
+        default=config.BACKBONE,
         choices=[
             'MobileNetV2', 'MobileNetV3Small', 'MobileNetV3Large',
             'EfficientNetLite0', 'EfficientNetLite1', 'EfficientNetLite2', 
-            'EfficientNetLite3', 'EfficientNetLite4',
-            'EfficientNetB0', 'EfficientNetB1', 'EfficientNetB2', 'EfficientNetB3',
-            'EfficientNetV2B0', 'EfficientNetV2B1', 'EfficientNetV2B2', 'EfficientNetV2B3'
+            'EfficientNetLite3', 'EfficientNetLite4'
         ],
-        help="Backbone à utiliser (défaut: MobileNetV2)"
+        help="Backbone à utiliser (défaut: MobileNetV3Small pour DeepLabCut)"
     )
     
     # Options de sauvegarde
@@ -183,11 +174,6 @@ def parse_arguments():
         '--save-data',
         action='store_true',
         help="Sauvegarder les données prétraitées"
-    )
-    parser.add_argument(
-        '--advanced-training',
-        action='store_true',
-        help="Utiliser l'entraînement avancé (Mixup, CutMix, SWA, Mixed Precision, 70 epochs)"
     )
     parser.add_argument(
         '--plot-history',

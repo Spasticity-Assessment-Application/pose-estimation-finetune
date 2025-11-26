@@ -31,54 +31,52 @@ def load_model_config(model_path):
 
 
 def load_keras_model(model_path):
-    """Charge le modèle Keras avec compatibilité TensorFlow 2.15+"""
-    print(f"🔄 Chargement du modèle Keras...")
-    try:
-        # Essayer avec compile=False pour éviter les erreurs de désérialisation
-        model = keras.models.load_model(model_path, compile=False)
-        
-        # Recompiler le modèle si nécessaire
-        model.compile(
-            optimizer=keras.optimizers.Adam(learning_rate=1e-4),
-            loss='mse',
-            metrics=['mae']
-        )
-        print("✅ Modèle chargé et recompilé")
-    except Exception as e:
-        print(f"⚠️  Erreur avec compile=False, essai avec custom_objects...")
-        # Fallback avec custom_objects vide
-        model = keras.models.load_model(model_path, compile=False, custom_objects={})
-        model.compile(
-            optimizer=keras.optimizers.Adam(learning_rate=1e-4),
-            loss='mse',
-            metrics=['mae']
-        )
-        print("✅ Modèle chargé avec custom_objects")
+    """Charge le modèle Keras ou SavedModel avec compatibilité TensorFlow 2.15+"""
+    print(f"🔄 Chargement du modèle...")
     
-    return model
+    # Essayer d'abord le SavedModel si disponible
+    saved_model_path = model_path.replace('_finetune_best.h5', '_saved_model')
+    if os.path.exists(saved_model_path):
+        print(f"🔄 Chargement SavedModel: {saved_model_path}")
+        try:
+            import tensorflow as tf
+            model = tf.saved_model.load(saved_model_path)
+            model.is_saved_model = True  # Marquer comme SavedModel
+            print("✅ SavedModel chargé")
+            return model
+        except Exception as e:
+            print(f"⚠️  Échec SavedModel: {e}")
+    
+    # Fallback vers .h5
+    print(f"🔄 Chargement modèle .h5: {model_path}")
+    try:
+        model = keras.models.load_model(model_path, compile=False)
+        model.is_saved_model = False
+        print("✅ Modèle .h5 chargé")
+        return model
+    except Exception as e:
+        print(f"❌ Échec du chargement du modèle: {e}")
+        raise e
 
 
 def get_model_input_size(model):
     """Extrait la taille d'entrée attendue par le modèle"""
     try:
-        input_shape = model.input_shape
-        # Format attendu: (batch, height, width, channels)
-        height = input_shape[1]
-        width = input_shape[2]
-        return (width, height)
-    except:
-        # Fallback pour MobileNetV2 et modèles anciens
-        return (192, 192)
-
-
-def get_model_input_size(model):
-    """Extrait la taille d'entrée attendue par le modèle"""
-    try:
-        input_shape = model.input_shape
-        # Format attendu: (batch, height, width, channels)
-        height = input_shape[1]
-        width = input_shape[2]
-        return (width, height)
+        if hasattr(model, 'is_saved_model') and model.is_saved_model:
+            # Pour SavedModel
+            import tensorflow as tf
+            infer = model.signatures['serving_default']
+            input_spec = infer.structured_input_signature[1]['image_input']
+            # input_spec est un TensorSpec avec shape comme (None, H, W, C)
+            height, width = input_spec.shape[1], input_spec.shape[2]
+            return (width, height)
+        else:
+            # Pour modèle Keras
+            input_shape = model.input_shape
+            # Format attendu: (batch, height, width, channels)
+            height = input_shape[1]
+            width = input_shape[2]
+            return (width, height)
     except:
         # Fallback pour MobileNetV2 et modèles anciens
         return (192, 192)
@@ -95,7 +93,17 @@ def preprocess_frame(frame, input_size=(192, 192)):
 def predict_frame(model, frame, input_size):
     """Fait une prédiction sur une frame"""
     input_data = preprocess_frame(frame, input_size)
-    heatmaps = model.predict(input_data, verbose=0)[0]
+    
+    if hasattr(model, 'is_saved_model') and model.is_saved_model:
+        # Pour SavedModel
+        import tensorflow as tf
+        infer = model.signatures['serving_default']
+        result = infer(image_input=tf.convert_to_tensor(input_data))
+        heatmaps = result['output_0'].numpy()[0]
+    else:
+        # Pour modèle Keras
+        heatmaps = model.predict(input_data, verbose=0)[0]
+    
     return heatmaps
 
 

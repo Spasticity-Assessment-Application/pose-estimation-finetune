@@ -205,11 +205,11 @@ DEEPLABCUT_LR = {
     "finetune_min": 3e-5 # Phase 3: LR min après cosine decay
 }
 
-# Epochs par phase
+# Epochs par phase - VERSION ÉTENDUE
 DEEPLABCUT_EPOCHS = {
     "warmup": 20,    # Phase 1: Warmup court mais intense
     "unfreeze": 30,  # Phase 2: Déblocage progressif
-    "finetune": 50   # Phase 3: Fine-tuning long
+    "finetune": 75   # Phase 3: Fine-tuning étendu (augmenté de 50 à 75)
 }
 
 # Régularisation

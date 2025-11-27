@@ -209,7 +209,7 @@ DEEPLABCUT_LR = {
 DEEPLABCUT_EPOCHS = {
     "warmup": 20,    # Phase 1: Warmup court mais intense
     "unfreeze": 30,  # Phase 2: Déblocage progressif
-    "finetune": 75   # Phase 3: Fine-tuning étendu (augmenté de 50 à 75)
+    "finetune": 50   # Phase 3: Fine-tuning étendu
 }
 
 # Régularisation

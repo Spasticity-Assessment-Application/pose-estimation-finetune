@@ -123,7 +123,7 @@ def create_deeplabcut_callbacks(phase_name, model_name, model_dir):
     # EarlyStopping - patience élevée comme DeepLabCut
     early_stop = EarlyStopping(
         monitor='val_loss',
-        patience=30,  # ✅ Patience augmentée pour permettre plus d'époques
+        patience=20,
         restore_best_weights=True,
         verbose=1
     )

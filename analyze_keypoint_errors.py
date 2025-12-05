@@ -159,13 +159,6 @@ def analyze_keypoint_performance(model, model_config, test_data_dir):
     """
     print("🔍 Analyse des erreurs par articulation...")
 
-    # Mapping des articulations pour gérer les différences de nommage
-    bodypart_mapping = {
-        'Cuisse': 'Hanche',  # Cuisse -> Hanche
-        'Pied': 'Cheville',  # Pied -> Cheville
-        'Genoux': 'Genoux'   # Genoux reste Genoux
-    }
-
     # Initialiser les collecteurs de données
     keypoint_errors = defaultdict(list)
 
@@ -198,6 +191,9 @@ def analyze_keypoint_performance(model, model_config, test_data_dir):
 
         # Charger les annotations
         df = pd.read_csv(csv_files[0], header=[0, 1, 2])
+
+        # Détecter le nom du scorer dynamiquement
+        scorer = df.columns[3][0]  # Le scorer est dans la 4ème colonne (index 3)
 
         # Traiter chaque image
         for idx, row in tqdm(df.iterrows(), desc=f"Traitement {folder.name}"):
@@ -236,17 +232,10 @@ def analyze_keypoint_performance(model, model_config, test_data_dir):
             gt_keypoints = []
             try:
                 for bodypart in model_config['bodyparts']:
-                    # Utiliser le mapping inverse pour les données de test
-                    data_bodypart = None
-                    for data_name, model_name in bodypart_mapping.items():
-                        if model_name == bodypart:
-                            data_bodypart = data_name
-                            break
-                    if data_bodypart is None:
-                        data_bodypart = bodypart  # Fallback si pas de mapping
+                    data_bodypart = bodypart  # Noms directement correspondants
 
-                    x = float(row[('jules', data_bodypart, 'x')])
-                    y = float(row[('jules', data_bodypart, 'y')])
+                    x = float(row[(scorer, data_bodypart, 'x')])
+                    y = float(row[(scorer, data_bodypart, 'y')])
 
                     # Normaliser par rapport à la taille originale
                     orig_h, orig_w = image.shape[:2]
@@ -267,9 +256,7 @@ def analyze_keypoint_performance(model, model_config, test_data_dir):
             # Accumuler les erreurs
             for kp_name, error_data in errors.items():
                 if error_data is not None:
-                    # Utiliser le mapping pour convertir les noms d'articulations
-                    mapped_name = bodypart_mapping.get(kp_name, kp_name)
-                    keypoint_errors[mapped_name].append(error_data)
+                    keypoint_errors[kp_name].append(error_data)
 
                     # Calculer PCK pour différents seuils
                     for threshold in pck_thresholds:
@@ -286,6 +273,14 @@ def analyze_keypoint_performance(model, model_config, test_data_dir):
 
             # Statistiques de distance
             distances = [e['distance'] for e in errors_list]
+            q1 = np.percentile(distances, 25)
+            q3 = np.percentile(distances, 75)
+            iqr = q3 - q1
+            lower_bound = q1 - 1.5 * iqr
+            upper_bound = q3 + 1.5 * iqr
+            outliers = [d for d in distances if d < lower_bound or d > upper_bound]
+            num_outliers = len(outliers)
+
             errors_x = [e['error_x'] for e in errors_list]
             errors_y = [e['error_y'] for e in errors_list]
             confidences = [e['confidence'] for e in errors_list]
@@ -300,6 +295,7 @@ def analyze_keypoint_performance(model, model_config, test_data_dir):
 
             results[kp_name] = {
                 'count': len(errors_list),
+                'outlier_count': num_outliers,
                 'distance_stats': {
                     'mean': np.mean(distances),
                     'std': np.std(distances),
@@ -408,6 +404,7 @@ def print_detailed_results(results):
         print(f"\n🔹 {kp_name.upper()}")
         print("-" * 40)
         print(f"   📏 Nombre d'échantillons: {data['count']}")
+        print(f"   📏 Nombre d'outliers: {data['outlier_count']} ({data['outlier_count']/data['count']*100:.1f}%)")
 
         print(f"\n   📊 Erreur de distance:")
         stats = data['distance_stats']
@@ -475,7 +472,11 @@ def main():
 
     # Générer les graphiques si demandé
     if args.plot or args.save_plot:
-        plot_error_distributions(results, args.save_plot)
+        save_path = args.save_plot
+        if args.plot and not args.save_plot:
+            # Sauvegarder automatiquement dans le dossier du modèle
+            save_path = os.path.join(args.model_dir, 'keypoint_error_analysis.png')
+        plot_error_distributions(results, save_path)
 
 
 if __name__ == "__main__":
